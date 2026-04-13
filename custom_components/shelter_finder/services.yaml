@@ -48,7 +48,7 @@ add_custom_poi:
         number:
           min: -90
           max: 90
-          step: 0.000001
+          step: "any"
           mode: box
     longitude:
       name: Longitude
@@ -58,7 +58,7 @@ add_custom_poi:
         number:
           min: -180
           max: 180
-          step: 0.000001
+          step: "any"
           mode: box
     shelter_type:
       name: Shelter type

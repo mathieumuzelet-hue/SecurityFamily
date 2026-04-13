@@ -9,7 +9,7 @@ from typing import Any
 
 import voluptuous as vol
 
-from homeassistant.components import webhook
+from homeassistant.components import webhook as ha_webhook
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall
@@ -114,7 +114,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _register_services(hass)
 
     webhook_id = config.get(CONF_WEBHOOK_ID, entry.entry_id)
-    webhook.async_register(hass, DOMAIN, "Shelter Finder Alert", webhook_id, async_handle_webhook)
+    ha_webhook.async_register(hass, DOMAIN, "Shelter Finder Alert", webhook_id, async_handle_webhook)
 
     # --- Register frontend static path ---
     if not hass.data[DOMAIN].get("_static_registered"):
@@ -166,7 +166,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     config = {**entry.data, **entry.options}
     webhook_id = config.get(CONF_WEBHOOK_ID, entry.entry_id)
-    webhook.async_unregister(hass, webhook_id)
+    ha_webhook.async_unregister(hass, webhook_id)
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
