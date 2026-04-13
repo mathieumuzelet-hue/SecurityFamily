@@ -4,13 +4,24 @@ from __future__ import annotations
 
 import pytest
 
-pytest_plugins = "pytest_homeassistant_custom_component"
+try:
+    pytest_plugins = "pytest_homeassistant_custom_component"
+    import pytest_homeassistant_custom_component  # noqa: F401
+    _HA_PLUGIN_AVAILABLE = True
+except ImportError:
+    _HA_PLUGIN_AVAILABLE = False
 
 
-@pytest.fixture(autouse=True)
-def auto_enable_custom_integrations(enable_custom_integrations):
-    """Enable custom integrations in all tests."""
-    yield
+if _HA_PLUGIN_AVAILABLE:
+    @pytest.fixture(autouse=True)
+    def auto_enable_custom_integrations(enable_custom_integrations):
+        """Enable custom integrations in all tests."""
+        yield
+else:
+    @pytest.fixture(autouse=True)
+    def auto_enable_custom_integrations():
+        """No-op stub when HA test plugin is unavailable."""
+        yield
 
 
 @pytest.fixture
