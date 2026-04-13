@@ -2,13 +2,21 @@
   "domain": "shelter_finder",
   "name": "Shelter Finder",
   "version": "0.2.0",
-  "codeowners": ["@mathieumuzelet-hue"],
+  "codeowners": [
+    "@mathieumuzelet-hue"
+  ],
   "config_flow": true,
-  "dependencies": ["http", "webhook", "frontend"],
+  "dependencies": [
+    "http",
+    "webhook",
+    "frontend"
+  ],
   "documentation": "https://github.com/mathieumuzelet-hue/SecurityFamily",
   "integration_type": "hub",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/mathieumuzelet-hue/SecurityFamily/issues",
   "requirements": [],
-  "loggers": ["custom_components.shelter_finder"]
+  "loggers": [
+    "custom_components.shelter_finder"
+  ]
 }
