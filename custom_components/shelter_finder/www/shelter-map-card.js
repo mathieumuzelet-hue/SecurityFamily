@@ -4,6 +4,15 @@
 const LEAFLET_CSS_URL = "https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css";
 const LEAFLET_JS_URL = "https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js";
 const PERSON_COLORS = ["#3182ce", "#e53e3e", "#38a169", "#d69e2e", "#805ad5", "#dd6b20", "#319795", "#b83280"];
+const SHELTER_COLORS = {
+  bunker: "#e53e3e", subway: "#3182ce", civic: "#38a169", school: "#d69e2e",
+  worship: "#805ad5", shelter: "#718096", sports: "#dd6b20", hospital: "#e53e3e",
+  government: "#2d3748", open_space: "#48bb78",
+};
+const SHELTER_LABELS = {
+  bunker: "B", subway: "M", civic: "C", school: "E", worship: "W",
+  shelter: "S", sports: "G", hospital: "H", government: "G", open_space: "O",
+};
 
 function _loadLeafletScript() {
   return new Promise(function(resolve, reject) {
@@ -14,6 +23,16 @@ function _loadLeafletScript() {
     script.onerror = reject;
     document.head.appendChild(script);
   });
+}
+
+function _haversine(lat1, lon1, lat2, lon2) {
+  var R = 6371000;
+  var dLat = (lat2 - lat1) * Math.PI / 180;
+  var dLon = (lon2 - lon1) * Math.PI / 180;
+  var a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
 function createPersonIcon(L, name, colorIndex) {
@@ -29,15 +48,11 @@ function createPersonIcon(L, name, colorIndex) {
 }
 
 function createShelterIcon(L, shelterType) {
-  var colors = {
-    bunker: "#e53e3e", subway: "#3182ce", civic: "#38a169", school: "#d69e2e",
-    worship: "#805ad5", shelter: "#718096", sports: "#dd6b20", hospital: "#e53e3e",
-    government: "#2d3748", open_space: "#48bb78",
-  };
-  var color = colors[shelterType] || colors.shelter;
+  var color = SHELTER_COLORS[shelterType] || SHELTER_COLORS.shelter;
+  var label = SHELTER_LABELS[shelterType] || "S";
   return L.divIcon({
     className: "shelter-poi-marker",
-    html: '<div style="background:' + color + ';color:white;width:24px;height:24px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:12px;border:1px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.3);opacity:0.85">S</div>',
+    html: '<div style="background:' + color + ';color:white;width:24px;height:24px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:bold;border:1px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.3);opacity:0.9">' + label + '</div>',
     iconSize: [24, 24],
     iconAnchor: [12, 12],
     popupAnchor: [0, -14],
@@ -54,7 +69,6 @@ class ShelterMapCard extends HTMLElement {
     this._personMarkers = new Map();
     this._shelterMarkers = new Map();
     this._fitted = false;
-    this._mapReady = false;
   }
 
   setConfig(config) {
@@ -67,8 +81,7 @@ class ShelterMapCard extends HTMLElement {
       alert_zoom: 15,
       height: "400px",
     }, config);
-
-    this._render();
+    this._buildDOM();
   }
 
   set hass(hass) {
@@ -77,49 +90,42 @@ class ShelterMapCard extends HTMLElement {
     if (this._map && this._L) {
       this._updatePersonMarkers(hass, old);
       this._updateShelterMarkers(hass);
+      this._updateAlertBanner(hass);
     }
-    this._updateAlertBanner();
   }
 
-  _render() {
+  _buildDOM() {
     var root = this.shadowRoot;
     root.textContent = "";
 
-    // Style
     var style = document.createElement("style");
-    style.textContent = [
-      ":host { display: block; }",
-      "#map { width: 100%; border-radius: 0 0 12px 12px; }",
-      ".alert-banner { background: #e53e3e; color: white; text-align: center; padding: 8px; font-weight: bold; font-size: 14px; letter-spacing: 1px; border-radius: 12px 12px 0 0; display: none; }",
-      ".alert-banner.active { display: block; }",
-      ".shelter-person-marker, .shelter-poi-marker { background: transparent !important; border: none !important; }",
-      "ha-card { overflow: hidden; }",
-    ].join("\n");
+    style.textContent =
+      ":host { display: block; }" +
+      "#map { width: 100%; border-radius: 0 0 12px 12px; }" +
+      ".alert-banner { background: #e53e3e; color: white; text-align: center; padding: 8px; font-weight: bold; font-size: 14px; letter-spacing: 1px; border-radius: 12px 12px 0 0; display: none; }" +
+      ".alert-banner.active { display: block; }" +
+      ".shelter-person-marker, .shelter-poi-marker { background: transparent !important; border: none !important; }" +
+      "ha-card { overflow: hidden; }";
     root.appendChild(style);
 
-    // Leaflet CSS
     var link = document.createElement("link");
     link.rel = "stylesheet";
     link.href = LEAFLET_CSS_URL;
     root.appendChild(link);
 
-    // Alert banner
     var banner = document.createElement("div");
     banner.className = "alert-banner";
     banner.id = "alert-banner";
     root.appendChild(banner);
 
-    // HA Card
     var card = document.createElement("ha-card");
     card.header = this.config.title;
-
     var mapDiv = document.createElement("div");
     mapDiv.id = "map";
     mapDiv.style.height = this.config.height;
     card.appendChild(mapDiv);
     root.appendChild(card);
 
-    // Init map after DOM is ready
     var self = this;
     setTimeout(function() { self._initMap(); }, 100);
   }
@@ -136,39 +142,38 @@ class ShelterMapCard extends HTMLElement {
     if (!container) return;
 
     this._map = this._L.map(container, { zoomControl: true, attributionControl: true });
-
     this._L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: "&copy; OpenStreetMap",
       maxZoom: 19,
       referrerPolicy: "origin",
     }).addTo(this._map);
 
-    this._mapReady = true;
-
     if (this._hass) {
       this._updatePersonMarkers(this._hass, null);
       this._updateShelterMarkers(this._hass);
+      this._updateAlertBanner(this._hass);
     }
   }
 
-  _findEntityId(hass, suffix) {
-    // Find entity_id ending with suffix, trying common patterns
-    var keys = Object.keys(hass.states);
-    for (var i = 0; i < keys.length; i++) {
-      if (keys[i].endsWith(suffix)) return keys[i];
+  _getPersonPositions(hass) {
+    var positions = [];
+    var entities = this.config.entities || [];
+    for (var i = 0; i < entities.length; i++) {
+      var s = hass.states[entities[i]];
+      if (s && s.attributes.latitude != null && s.attributes.longitude != null) {
+        positions.push({ id: entities[i], lat: s.attributes.latitude, lon: s.attributes.longitude, name: s.attributes.friendly_name || entities[i].split(".").pop() });
+      }
     }
-    return null;
+    return positions;
   }
 
-  _updateAlertBanner() {
+  _updateAlertBanner(hass) {
     var banner = this.shadowRoot ? this.shadowRoot.querySelector("#alert-banner") : null;
-    if (!banner || !this._hass) return;
-    var alertId = this._findEntityId(this._hass, "_alert") || "binary_sensor.alert";
-    var alertSensor = this._hass.states[alertId];
+    if (!banner) return;
+    var alertSensor = hass.states["binary_sensor.alert"];
     var isAlert = alertSensor && alertSensor.state === "on";
-    var alertTypeId = this._findEntityId(this._hass, "_alert_type") || "sensor.alert_type";
-    var alertType = this._hass.states[alertTypeId];
     if (isAlert) {
+      var alertType = hass.states["sensor.alert_type"];
       banner.textContent = "ALERTE: " + ((alertType ? alertType.state : "UNKNOWN").toUpperCase());
       banner.classList.add("active");
     } else {
@@ -212,17 +217,15 @@ class ShelterMapCard extends HTMLElement {
         self._personMarkers.set(entityId, marker);
       }
 
-      // Update popup with shelter info — find sensors by suffix pattern
+      // Update popup with nearest shelter info
       var personKey = entityId.split(".").pop();
-      var nearestState = hass.states["sensor." + personKey + "_shelter_nearest"]
-        || hass.states["sensor.shelter_finder_" + personKey + "_nearest"];
-      var distState = hass.states["sensor." + personKey + "_shelter_distance"]
-        || hass.states["sensor.shelter_finder_" + personKey + "_distance"];
+      var nearestState = hass.states["sensor." + personKey + "_shelter_nearest"];
+      var distState = hass.states["sensor." + personKey + "_shelter_distance"];
 
       var popupHtml = "<b>" + name + "</b>";
-      if (nearestState && nearestState.state !== "unknown" && nearestState.state !== "unavailable") {
+      if (nearestState && nearestState.state && nearestState.state !== "unknown" && nearestState.state !== "unavailable") {
         popupHtml += "<br>Abri: " + nearestState.state;
-        if (distState && distState.state !== "unknown" && distState.state !== "unavailable") {
+        if (distState && distState.state && distState.state !== "unknown") {
           popupHtml += " (" + distState.state + "m)";
         }
       }
@@ -243,34 +246,38 @@ class ShelterMapCard extends HTMLElement {
   _updateShelterMarkers(hass) {
     var L = this._L;
     if (!L || !this._map) return;
-    var self = this;
 
-    // Find the alert binary sensor (which contains all shelters in attributes)
-    var alertId = this._findEntityId(hass, "_alert");
-    if (!alertId) {
-      // Fallback: try common names
-      alertId = "binary_sensor.alert";
-    }
-    var alertState = hass.states[alertId];
+    // Read all shelters from binary_sensor.alert attributes
+    var alertState = hass.states["binary_sensor.alert"];
     if (!alertState || !alertState.attributes || !alertState.attributes.shelters) return;
 
     var shelters = alertState.attributes.shelters;
+    var persons = this._getPersonPositions(hass);
     var seenIds = new Set();
 
     for (var i = 0; i < shelters.length; i++) {
       var s = shelters[i];
       if (s.lat == null || s.lon == null) continue;
 
-      var markerId = s.lat + "," + s.lon;
+      var markerId = s.lat.toFixed(6) + "," + s.lon.toFixed(6);
       if (seenIds.has(markerId)) continue;
       seenIds.add(markerId);
 
-      if (!self._shelterMarkers.has(markerId)) {
+      if (!this._shelterMarkers.has(markerId)) {
         var icon = createShelterIcon(L, s.type || "shelter");
+
+        // Build popup with distances to each person
+        var popupHtml = "<b>" + (s.name || "Abri") + "</b><br>Type: " + (s.type || "?");
+        for (var j = 0; j < persons.length; j++) {
+          var dist = Math.round(_haversine(persons[j].lat, persons[j].lon, s.lat, s.lon));
+          var eta = Math.round(dist / 1.4 / 60); // walking speed ~5km/h
+          popupHtml += "<br>" + persons[j].name + ": " + dist + "m (~" + eta + " min)";
+        }
+
         var marker = L.marker([s.lat, s.lon], { icon: icon })
-          .bindPopup("<b>" + (s.name || "Abri") + "</b><br>Type: " + (s.type || "?") + "<br>Source: " + (s.source || "osm"))
-          .addTo(self._map);
-        self._shelterMarkers.set(markerId, marker);
+          .bindPopup(popupHtml)
+          .addTo(this._map);
+        this._shelterMarkers.set(markerId, marker);
       }
     }
   }
@@ -289,7 +296,7 @@ window.customCards.push({
 });
 
 console.info(
-  "%c SHELTER-MAP-CARD %c v0.2.0 ",
+  "%c SHELTER-MAP-CARD %c v0.2.1 ",
   "background:#3182ce;color:white;font-weight:bold;padding:2px 6px;border-radius:3px 0 0 3px",
   "background:#e2e8f0;padding:2px 6px;border-radius:0 3px 3px 0"
 );
