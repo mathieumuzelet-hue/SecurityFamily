@@ -1,7 +1,7 @@
 {
   "domain": "shelter_finder",
   "name": "Shelter Finder",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "codeowners": ["@mathieumuzelet-hue"],
   "config_flow": true,
   "dependencies": ["http", "webhook"],
