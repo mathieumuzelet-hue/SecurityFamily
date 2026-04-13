@@ -47,12 +47,24 @@ function createPersonIcon(L, name, colorIndex) {
   });
 }
 
-function createShelterIcon(L, shelterType) {
+function createShelterIcon(L, shelterType, isRecommended) {
   var color = SHELTER_COLORS[shelterType] || SHELTER_COLORS.shelter;
   var label = SHELTER_LABELS[shelterType] || "S";
+  if (isRecommended) {
+    return L.divIcon({
+      className: "shelter-poi-marker",
+      html: '<div style="position:relative">' +
+        '<div style="position:absolute;top:-4px;left:-4px;width:40px;height:40px;border-radius:8px;background:' + color + ';opacity:0.25;animation:shelter-pulse 2s ease-in-out infinite"></div>' +
+        '<div style="background:' + color + ';color:white;width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:bold;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.4);position:relative;z-index:1">\u2605</div>' +
+        '</div>',
+      iconSize: [32, 32],
+      iconAnchor: [16, 16],
+      popupAnchor: [0, -18],
+    });
+  }
   return L.divIcon({
     className: "shelter-poi-marker",
-    html: '<div style="background:' + color + ';color:white;width:24px;height:24px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:bold;border:1px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.3);opacity:0.9">' + label + '</div>',
+    html: '<div style="background:' + color + ';color:white;width:24px;height:24px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:bold;border:1px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.3);opacity:0.7">' + label + '</div>',
     iconSize: [24, 24],
     iconAnchor: [12, 12],
     popupAnchor: [0, -14],
@@ -68,6 +80,7 @@ class ShelterMapCard extends HTMLElement {
     this._L = null;
     this._personMarkers = new Map();
     this._shelterMarkers = new Map();
+    this._routeLines = [];
     this._fitted = false;
   }
 
@@ -105,7 +118,8 @@ class ShelterMapCard extends HTMLElement {
       ".alert-banner { background: #e53e3e; color: white; text-align: center; padding: 8px; font-weight: bold; font-size: 14px; letter-spacing: 1px; border-radius: 12px 12px 0 0; display: none; }" +
       ".alert-banner.active { display: block; }" +
       ".shelter-person-marker, .shelter-poi-marker { background: transparent !important; border: none !important; }" +
-      "ha-card { overflow: hidden; }";
+      "ha-card { overflow: hidden; }" +
+      "@keyframes shelter-pulse { 0%,100% { transform:scale(1); opacity:0.25; } 50% { transform:scale(1.4); opacity:0.08; } }";
     root.appendChild(style);
 
     var link = document.createElement("link");
@@ -167,6 +181,23 @@ class ShelterMapCard extends HTMLElement {
     return positions;
   }
 
+  _getRecommendedShelters(hass) {
+    var recommended = new Set();
+    var entities = this.config.entities || [];
+    for (var i = 0; i < entities.length; i++) {
+      var personKey = entities[i].split(".").pop();
+      var nearestState = hass.states["sensor." + personKey + "_shelter_nearest"];
+      if (nearestState && nearestState.attributes) {
+        var lat = nearestState.attributes.latitude;
+        var lon = nearestState.attributes.longitude;
+        if (lat != null && lon != null) {
+          recommended.add(Number(lat).toFixed(6) + "," + Number(lon).toFixed(6));
+        }
+      }
+    }
+    return recommended;
+  }
+
   _updateAlertBanner(hass) {
     var banner = this.shadowRoot ? this.shadowRoot.querySelector("#alert-banner") : null;
     if (!banner) return;
@@ -221,12 +252,16 @@ class ShelterMapCard extends HTMLElement {
       var personKey = entityId.split(".").pop();
       var nearestState = hass.states["sensor." + personKey + "_shelter_nearest"];
       var distState = hass.states["sensor." + personKey + "_shelter_distance"];
+      var etaState = hass.states["sensor." + personKey + "_shelter_eta"];
 
       var popupHtml = "<b>" + name + "</b>";
       if (nearestState && nearestState.state && nearestState.state !== "unknown" && nearestState.state !== "unavailable") {
-        popupHtml += "<br>Abri: " + nearestState.state;
+        popupHtml += "<br>\u2605 Abri: <b>" + nearestState.state + "</b>";
         if (distState && distState.state && distState.state !== "unknown") {
-          popupHtml += " (" + distState.state + "m)";
+          popupHtml += "<br>Distance: " + distState.state + "m";
+        }
+        if (etaState && etaState.state && etaState.state !== "unknown") {
+          popupHtml += " (~" + etaState.state + " min)";
         }
       }
       var mk = self._personMarkers.get(entityId);
@@ -253,7 +288,20 @@ class ShelterMapCard extends HTMLElement {
 
     var shelters = alertState.attributes.shelters;
     var persons = this._getPersonPositions(hass);
+    var recommended = this._getRecommendedShelters(hass);
     var seenIds = new Set();
+
+    // Clear old route lines
+    for (var r = 0; r < this._routeLines.length; r++) {
+      this._map.removeLayer(this._routeLines[r]);
+    }
+    this._routeLines = [];
+
+    // Clear old shelter markers (to handle recommended status changes)
+    this._shelterMarkers.forEach(function(marker) {
+      marker.remove();
+    });
+    this._shelterMarkers.clear();
 
     for (var i = 0; i < shelters.length; i++) {
       var s = shelters[i];
@@ -263,22 +311,49 @@ class ShelterMapCard extends HTMLElement {
       if (seenIds.has(markerId)) continue;
       seenIds.add(markerId);
 
-      if (!this._shelterMarkers.has(markerId)) {
-        var icon = createShelterIcon(L, s.type || "shelter");
+      var isReco = recommended.has(markerId);
+      var icon = createShelterIcon(L, s.type || "shelter", isReco);
 
-        // Build popup with distances to each person
-        var popupHtml = "<b>" + (s.name || "Abri") + "</b><br>Type: " + (s.type || "?");
-        for (var j = 0; j < persons.length; j++) {
-          var dist = Math.round(_haversine(persons[j].lat, persons[j].lon, s.lat, s.lon));
-          var eta = Math.round(dist / 1.4 / 60); // walking speed ~5km/h
-          popupHtml += "<br>" + persons[j].name + ": " + dist + "m (~" + eta + " min)";
-        }
-
-        var marker = L.marker([s.lat, s.lon], { icon: icon })
-          .bindPopup(popupHtml)
-          .addTo(this._map);
-        this._shelterMarkers.set(markerId, marker);
+      // Build popup with distances to each person
+      var popupHtml = (isReco ? "\u2605 " : "") + "<b>" + (s.name || "Abri") + "</b><br>Type: " + (s.type || "?");
+      if (isReco) {
+        popupHtml += "<br><span style='color:#38a169;font-weight:bold'>Abri recommand\u00e9</span>";
       }
+      for (var j = 0; j < persons.length; j++) {
+        var dist = Math.round(_haversine(persons[j].lat, persons[j].lon, s.lat, s.lon));
+        var eta = Math.round(dist / 1.4 / 60);
+        popupHtml += "<br>" + persons[j].name + ": " + dist + "m (~" + eta + " min)";
+      }
+
+      var marker = L.marker([s.lat, s.lon], {
+        icon: icon,
+        zIndexOffset: isReco ? 500 : 0,
+      }).bindPopup(popupHtml).addTo(this._map);
+      this._shelterMarkers.set(markerId, marker);
+    }
+
+    // Draw dashed route lines from each person to their recommended shelter
+    var entities = this.config.entities || [];
+    for (var k = 0; k < entities.length; k++) {
+      var personKey = entities[k].split(".").pop();
+      var personPos = null;
+      for (var p = 0; p < persons.length; p++) {
+        if (persons[p].id === entities[k]) { personPos = persons[p]; break; }
+      }
+      if (!personPos) continue;
+
+      var nearestState = hass.states["sensor." + personKey + "_shelter_nearest"];
+      if (!nearestState || !nearestState.attributes) continue;
+      var sLat = nearestState.attributes.latitude;
+      var sLon = nearestState.attributes.longitude;
+      if (sLat == null || sLon == null) continue;
+
+      var personColor = PERSON_COLORS[k % PERSON_COLORS.length];
+      var line = L.polyline(
+        [[personPos.lat, personPos.lon], [sLat, sLon]],
+        { color: personColor, weight: 2, dashArray: "8, 6", opacity: 0.7 }
+      ).addTo(this._map);
+      this._routeLines.push(line);
     }
   }
 
@@ -296,7 +371,7 @@ window.customCards.push({
 });
 
 console.info(
-  "%c SHELTER-MAP-CARD %c v0.4.1 ",
+  "%c SHELTER-MAP-CARD %c v0.5.0 ",
   "background:#3182ce;color:white;font-weight:bold;padding:2px 6px;border-radius:3px 0 0 3px",
   "background:#e2e8f0;padding:2px 6px;border-radius:0 3px 3px 0"
 );
