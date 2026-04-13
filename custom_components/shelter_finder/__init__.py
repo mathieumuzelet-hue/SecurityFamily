@@ -60,14 +60,14 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     return True
 
 
-def _register_frontend(hass: HomeAssistant) -> None:
+async def _register_frontend(hass: HomeAssistant) -> None:
     """Register the JS card as a Lovelace resource (once per HA instance)."""
     if hass.data.get(DOMAIN, {}).get("_frontend_registered"):
         return
-    hass.http.register_static_path(
-        "/shelter_finder",
-        str(Path(__file__).parent / "www"),
-        cache_headers=False,
+    # Use the async API (HA 2024.7+)
+    from homeassistant.components.http import StaticPathConfig
+    await hass.http.async_register_static_paths(
+        [StaticPathConfig("/shelter_finder", str(Path(__file__).parent / "www"), False)]
     )
     from homeassistant.components.frontend import add_extra_js_url
     add_extra_js_url(hass, "/shelter_finder/shelter-map-card.js")
@@ -77,7 +77,7 @@ def _register_frontend(hass: HomeAssistant) -> None:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Shelter Finder from a config entry."""
     hass.data.setdefault(DOMAIN, {})
-    _register_frontend(hass)
+    await _register_frontend(hass)
 
     config = {**entry.data, **entry.options}
     persons = config.get(CONF_PERSONS, [])
