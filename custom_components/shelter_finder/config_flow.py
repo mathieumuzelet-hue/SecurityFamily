@@ -10,6 +10,11 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, OptionsFlow
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
+from homeassistant.helpers.selector import (
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
+)
 
 from .const import (
     CONF_ADAPTIVE_RADIUS,
@@ -60,7 +65,13 @@ class ShelterFinderConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema({
-                vol.Required(CONF_PERSONS, default=person_entities): vol.All(vol.Coerce(list), [vol.In(person_entities)]),
+                vol.Required(CONF_PERSONS, default=person_entities): SelectSelector(
+                    SelectSelectorConfig(
+                        options=person_entities,
+                        multiple=True,
+                        mode=SelectSelectorMode.LIST,
+                    )
+                ),
                 vol.Required(CONF_SEARCH_RADIUS, default=DEFAULT_RADIUS): vol.All(int, vol.Range(min=500, max=50000)),
                 vol.Required(CONF_LANGUAGE, default=DEFAULT_LANGUAGE): vol.In(["fr", "en"]),
             }),
@@ -75,8 +86,19 @@ class ShelterFinderConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="threats",
             data_schema=vol.Schema({
-                vol.Required(CONF_ENABLED_THREATS, default=THREAT_TYPES): vol.All(vol.Coerce(list), [vol.In(THREAT_TYPES)]),
-                vol.Required(CONF_DEFAULT_TRAVEL_MODE, default=DEFAULT_TRAVEL_MODE): vol.In(TRAVEL_MODES),
+                vol.Required(CONF_ENABLED_THREATS, default=THREAT_TYPES): SelectSelector(
+                    SelectSelectorConfig(
+                        options=THREAT_TYPES,
+                        multiple=True,
+                        mode=SelectSelectorMode.LIST,
+                    )
+                ),
+                vol.Required(CONF_DEFAULT_TRAVEL_MODE, default=DEFAULT_TRAVEL_MODE): SelectSelector(
+                    SelectSelectorConfig(
+                        options=TRAVEL_MODES,
+                        mode=SelectSelectorMode.DROPDOWN,
+                    )
+                ),
             }),
         )
 
