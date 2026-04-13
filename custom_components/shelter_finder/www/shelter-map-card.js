@@ -137,9 +137,10 @@ class ShelterMapCard extends HTMLElement {
 
     this._map = this._L.map(container, { zoomControl: true, attributionControl: true });
 
-    this._L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    this._L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: "&copy; OpenStreetMap",
       maxZoom: 19,
+      referrerPolicy: "origin",
     }).addTo(this._map);
 
     this._mapReady = true;
