@@ -170,10 +170,10 @@ class ShelterMapCard extends HTMLElement {
   _updateAlertBanner(hass) {
     var banner = this.shadowRoot ? this.shadowRoot.querySelector("#alert-banner") : null;
     if (!banner) return;
-    var alertSensor = hass.states["binary_sensor.shelter_finder_alert"];
+    var alertSensor = hass.states["binary_sensor.alert"];
     var isAlert = alertSensor && alertSensor.state === "on";
     if (isAlert) {
-      var alertType = hass.states["sensor.shelter_finder_alert_type"];
+      var alertType = hass.states["sensor.alert_type"];
       banner.textContent = "ALERTE: " + ((alertType ? alertType.state : "UNKNOWN").toUpperCase());
       banner.classList.add("active");
     } else {
@@ -248,7 +248,7 @@ class ShelterMapCard extends HTMLElement {
     if (!L || !this._map) return;
 
     // Read all shelters from binary_sensor.alert attributes
-    var alertState = hass.states["binary_sensor.shelter_finder_alert"];
+    var alertState = hass.states["binary_sensor.alert"];
     if (!alertState || !alertState.attributes || !alertState.attributes.shelters) return;
 
     var shelters = alertState.attributes.shelters;
