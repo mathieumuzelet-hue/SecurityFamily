@@ -1,0 +1,42 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configuration Shelter Finder",
+        "description": "Sélectionnez les personnes à suivre et le rayon de recherche des abris.",
+        "data": {
+          "persons": "Personnes à suivre",
+          "search_radius": "Rayon de recherche (mètres)",
+          "language": "Langue"
+        }
+      },
+      "threats": {
+        "title": "Configuration des menaces",
+        "description": "Sélectionnez les types de menaces à activer et le mode de déplacement par défaut.",
+        "data": {
+          "enabled_threats": "Menaces activées",
+          "default_travel_mode": "Mode de déplacement par défaut"
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Une seule instance de Shelter Finder est autorisée."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options Shelter Finder",
+        "data": {
+          "search_radius": "Rayon de recherche (mètres)",
+          "default_travel_mode": "Mode de déplacement par défaut",
+          "overpass_url": "URL de l'API Overpass",
+          "cache_ttl": "Durée du cache (heures)",
+          "adaptive_radius": "Rayon de recherche adaptatif",
+          "re_notification_interval": "Intervalle de re-notification (minutes)",
+          "max_re_notifications": "Nombre maximum de re-notifications"
+        }
+      }
+    }
+  }
+}
