@@ -1,42 +1,33 @@
 // Shelter Finder Map Card — Lovelace custom card
-// Loaded as ES module from /shelter_finder/shelter-map-card.js
+// Uses HA globals (no ESM import needed)
 
-const LitModule = await (async () => {
-  try {
-    return await import("/frontend_latest/lit.js");
-  } catch {
-    return await import("https://cdn.jsdelivr.net/npm/lit@3/+esm");
-  }
-})();
-
-const { LitElement, html, css, nothing } = LitModule;
+const LitElement = Object.getPrototypeOf(customElements.get("ha-panel-lovelace"));
+const { html, css, nothing } = LitElement.prototype.constructor;
 
 const LEAFLET_CSS_URL = "https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css";
-const LEAFLET_JS_URL = "https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet-src.esm.js";
-
-let _leafletPromise = null;
-function loadLeaflet() {
-  if (!_leafletPromise) {
-    _leafletPromise = import(LEAFLET_JS_URL).then((m) => m.default);
-  }
-  return _leafletPromise;
-}
-
-async function injectLeafletCSS(shadowRoot) {
-  if ("adoptedStyleSheets" in Document.prototype) {
-    const sheet = new CSSStyleSheet();
-    const cssText = await fetch(LEAFLET_CSS_URL).then((r) => r.text());
-    await sheet.replace(cssText);
-    shadowRoot.adoptedStyleSheets = [...shadowRoot.adoptedStyleSheets, sheet];
-  } else {
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = LEAFLET_CSS_URL;
-    shadowRoot.appendChild(link);
-  }
-}
+const LEAFLET_JS_URL = "https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js";
 
 const PERSON_COLORS = ["#3182ce", "#e53e3e", "#38a169", "#d69e2e", "#805ad5", "#dd6b20", "#319795", "#b83280"];
+
+function _loadLeafletScript() {
+  return new Promise((resolve, reject) => {
+    if (window.L) { resolve(window.L); return; }
+    const script = document.createElement("script");
+    script.src = LEAFLET_JS_URL;
+    script.onload = () => resolve(window.L);
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+}
+
+function _injectLeafletCSS(shadowRoot) {
+  if (shadowRoot.querySelector("#leaflet-css")) return;
+  const link = document.createElement("link");
+  link.id = "leaflet-css";
+  link.rel = "stylesheet";
+  link.href = LEAFLET_CSS_URL;
+  shadowRoot.appendChild(link);
+}
 
 function createPersonIcon(L, name, colorIndex) {
   const color = PERSON_COLORS[colorIndex % PERSON_COLORS.length];
@@ -113,10 +104,12 @@ class ShelterMapCard extends LitElement {
   }
 
   async firstUpdated() {
-    await injectLeafletCSS(this.shadowRoot);
-    this._L = await loadLeaflet();
+    _injectLeafletCSS(this.shadowRoot);
+    this._L = await _loadLeafletScript();
 
     const container = this.shadowRoot.querySelector("#map");
+    if (!container) return;
+
     this._map = this._L.map(container, { zoomControl: true, attributionControl: true });
 
     this._L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -132,6 +125,7 @@ class ShelterMapCard extends LitElement {
 
   _updatePersonMarkers(hass, prevHass) {
     const L = this._L;
+    if (!L) return;
     const entities = this.config.entities || [];
     const bounds = [];
 
@@ -145,7 +139,7 @@ class ShelterMapCard extends LitElement {
       const latlng = [latitude, longitude];
       bounds.push(latlng);
 
-      const prev = prevHass?.states[entityId];
+      const prev = prevHass ? prevHass.states[entityId] : null;
       if (prev && prev.attributes.latitude === latitude && prev.attributes.longitude === longitude) {
         return;
       }
@@ -155,7 +149,7 @@ class ShelterMapCard extends LitElement {
       } else {
         const name = friendly_name || entityId.split(".").pop();
         const icon = createPersonIcon(L, name, index);
-        const marker = L.marker(latlng, { icon, title: name, zIndexOffset: 1000 })
+        const marker = L.marker(latlng, { icon: icon, title: name, zIndexOffset: 1000 })
           .bindPopup("<b>" + name + "</b>")
           .addTo(this._map);
         this._personMarkers.set(entityId, marker);
@@ -168,15 +162,15 @@ class ShelterMapCard extends LitElement {
       const nearestState = hass.states[nearestSensor];
       const distState = hass.states[distSensor];
 
-      let popupHtml = "<b>" + name + "</b>";
+      var popupHtml = "<b>" + name + "</b>";
       if (nearestState && nearestState.state !== "unknown" && nearestState.state !== "unavailable") {
-        popupHtml += "<br>Nearest: " + nearestState.state;
+        popupHtml += "<br>Abri: " + nearestState.state;
         if (distState && distState.state !== "unknown") {
           popupHtml += " (" + distState.state + "m)";
         }
       }
-      const marker = this._personMarkers.get(entityId);
-      if (marker) marker.getPopup()?.setContent(popupHtml);
+      var mk = this._personMarkers.get(entityId);
+      if (mk && mk.getPopup()) mk.getPopup().setContent(popupHtml);
     });
 
     if (!this._fitted && bounds.length) {
@@ -191,26 +185,31 @@ class ShelterMapCard extends LitElement {
 
   _updateShelterMarkers(hass) {
     const L = this._L;
+    if (!L) return;
     const shelterEntities = Object.keys(hass.states).filter(
-      (id) => id.startsWith("sensor.shelter_finder_") && id.endsWith("_nearest")
+      function(id) { return id.startsWith("sensor.shelter_finder_") && id.endsWith("_nearest"); }
     );
 
     const seenIds = new Set();
 
-    for (const sensorId of shelterEntities) {
-      const state = hass.states[sensorId];
+    for (var i = 0; i < shelterEntities.length; i++) {
+      var sensorId = shelterEntities[i];
+      var state = hass.states[sensorId];
       if (!state || state.state === "unknown" || state.state === "unavailable") continue;
 
-      const { latitude, longitude, shelter_type, source } = state.attributes;
-      if (latitude == null || longitude == null) continue;
+      var lat = state.attributes.latitude;
+      var lon = state.attributes.longitude;
+      var shelter_type = state.attributes.shelter_type;
+      var source = state.attributes.source;
+      if (lat == null || lon == null) continue;
 
-      const markerId = latitude + "," + longitude;
+      var markerId = lat + "," + lon;
       if (seenIds.has(markerId)) continue;
       seenIds.add(markerId);
 
       if (!this._shelterMarkers.has(markerId)) {
-        const icon = createShelterIcon(L, shelter_type || "shelter");
-        const marker = L.marker([latitude, longitude], { icon })
+        var icon = createShelterIcon(L, shelter_type || "shelter");
+        var marker = L.marker([lat, lon], { icon: icon })
           .bindPopup("<b>" + state.state + "</b><br>Type: " + (shelter_type || "unknown") + "<br>Source: " + (source || "osm"))
           .addTo(this._map);
         this._shelterMarkers.set(markerId, marker);
@@ -219,14 +218,15 @@ class ShelterMapCard extends LitElement {
   }
 
   render() {
-    const alertSensor = this._hass?.states["binary_sensor.shelter_finder_alert"];
-    const isAlert = alertSensor?.state === "on";
-    const alertType = this._hass?.states["sensor.shelter_finder_alert_type"]?.state;
+    var alertSensor = this._hass ? this._hass.states["binary_sensor.shelter_finder_alert"] : null;
+    var isAlert = alertSensor && alertSensor.state === "on";
+    var alertType = this._hass ? this._hass.states["sensor.shelter_finder_alert_type"] : null;
+    var alertText = alertType ? alertType.state : "";
 
     return html`
-      ${isAlert ? html`<div class="alert-banner">ALERTE: ${alertType?.toUpperCase() || "UNKNOWN"}</div>` : nothing}
-      <ha-card header=${this.config?.title ?? "Shelter Finder"}>
-        <div id="map" style="height:${this.config?.height ?? "400px"}"></div>
+      ${isAlert ? html`<div class="alert-banner">ALERTE: ${(alertText || "UNKNOWN").toUpperCase()}</div>` : ""}
+      <ha-card header=${this.config ? this.config.title : "Shelter Finder"}>
+        <div id="map" style="height:${this.config ? this.config.height : "400px"}"></div>
       </ha-card>
     `;
   }
@@ -246,55 +246,11 @@ class ShelterMapCard extends LitElement {
 
   getCardSize() { return 5; }
 
-  static getConfigElement() {
-    return document.createElement("shelter-map-card-editor");
-  }
-
   static getStubConfig() {
     return { title: "Shelter Finder", entities: ["person.alice"], default_zoom: 13 };
   }
 }
 
-class ShelterMapCardEditor extends LitElement {
-  static get properties() {
-    return { hass: {}, _config: { state: true } };
-  }
-
-  setConfig(config) { this._config = config; }
-
-  _valueChanged(ev) {
-    const cfg = { ...this._config, [ev.target.name]: ev.target.value };
-    this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: cfg } }));
-  }
-
-  render() {
-    if (!this._config) return nothing;
-    return html`
-      <div class="editor">
-        <label>Title <input name="title" .value=${this._config.title ?? ""} @change=${this._valueChanged}></label>
-        <label>Entities (comma-separated)
-          <input name="_entities_raw" .value=${(this._config.entities ?? []).join(", ")}
-            @change=${(ev) => {
-              const cfg = { ...this._config, entities: ev.target.value.split(",").map((s) => s.trim()).filter(Boolean) };
-              this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: cfg } }));
-            }}>
-        </label>
-        <label>Default zoom <input type="number" name="default_zoom" .value=${this._config.default_zoom ?? 13} @change=${this._valueChanged}></label>
-        <label>Height <input name="height" .value=${this._config.height ?? "400px"} @change=${this._valueChanged}></label>
-      </div>
-    `;
-  }
-
-  static get styles() {
-    return css`
-      .editor { display: flex; flex-direction: column; gap: 8px; padding: 16px; }
-      label { display: flex; flex-direction: column; font-size: 0.85em; }
-      input { margin-top: 4px; padding: 6px 8px; border: 1px solid var(--divider-color, #ccc); border-radius: 4px; }
-    `;
-  }
-}
-
-customElements.define("shelter-map-card-editor", ShelterMapCardEditor);
 customElements.define("shelter-map-card", ShelterMapCard);
 
 window.customCards = window.customCards || [];
@@ -302,7 +258,7 @@ window.customCards.push({
   type: "shelter-map-card",
   name: "Shelter Finder Map",
   description: "Carte des abris et membres du foyer",
-  preview: true,
+  preview: false,
 });
 
 console.info(
