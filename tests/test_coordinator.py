@@ -12,7 +12,7 @@ from custom_components.shelter_finder.coordinator import ShelterUpdateCoordinato
 @pytest.fixture
 def mock_cache() -> MagicMock:
     cache = MagicMock()
-    cache.is_valid = False
+    cache.is_valid = MagicMock(return_value=False)
     cache.load.return_value = []
     cache.load_pois.return_value = []
     cache.load_stale.return_value = []
@@ -59,7 +59,7 @@ async def test_fetch_from_overpass_when_cache_empty(coordinator, mock_overpass_c
 
 @pytest.mark.asyncio
 async def test_use_cache_when_valid(coordinator, mock_cache, mock_overpass_client):
-    mock_cache.is_valid = True
+    mock_cache.is_valid = MagicMock(return_value=True)
     mock_cache.load.return_value = [
         {"osm_id": "node/1", "name": "Cached", "latitude": 48.85, "longitude": 2.35, "shelter_type": "bunker", "source": "osm"},
     ]

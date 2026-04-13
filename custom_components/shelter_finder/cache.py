@@ -15,7 +15,11 @@ POI_FILENAME = "shelter_finder_pois.json"
 
 
 class ShelterCache:
-    """File-based JSON cache with TTL for shelter data."""
+    """File-based JSON cache with TTL for shelter data.
+
+    All public methods perform blocking I/O — callers MUST wrap them
+    with ``await asyncio.to_thread(...)`` when running inside the event loop.
+    """
 
     def __init__(self, storage_dir: Path, ttl_hours: int = 24) -> None:
         self._storage_dir = storage_dir
@@ -23,8 +27,8 @@ class ShelterCache:
         self._cache_file = storage_dir / CACHE_FILENAME
         self._poi_file = storage_dir / POI_FILENAME
 
-    @property
     def is_valid(self) -> bool:
+        """Check if the cache is still fresh (blocking I/O)."""
         if not self._cache_file.exists():
             return False
         age = time.time() - self._cache_file.stat().st_mtime
@@ -35,7 +39,7 @@ class ShelterCache:
         self._cache_file.write_text(json.dumps(shelters, ensure_ascii=False), encoding="utf-8")
 
     def load(self) -> list[dict[str, Any]]:
-        if not self.is_valid:
+        if not self.is_valid():
             return []
         try:
             data = json.loads(self._cache_file.read_text(encoding="utf-8"))

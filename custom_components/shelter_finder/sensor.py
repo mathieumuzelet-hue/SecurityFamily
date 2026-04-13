@@ -111,7 +111,25 @@ class ShelterDistanceSensor(SensorEntity):
         if self._alert_coordinator.is_active:
             shelter = self._alert_coordinator.get_best_shelter(self._person_id)
             return shelter["distance_m"] if shelter else None
-        return None
+        return self._nearest_distance()
+
+    def _nearest_distance(self):
+        if not self._coordinator.data:
+            return None
+        hass = self._coordinator.hass
+        state = hass.states.get(self._person_id) if hass else None
+        if state is None:
+            return None
+        lat = state.attributes.get("latitude")
+        lon = state.attributes.get("longitude")
+        if lat is None or lon is None:
+            return None
+        min_dist = float("inf")
+        for shelter in self._coordinator.data:
+            dist = haversine_distance(lat, lon, shelter["latitude"], shelter["longitude"])
+            if dist < min_dist:
+                min_dist = dist
+        return round(min_dist) if min_dist < float("inf") else None
 
 
 class ShelterETASensor(SensorEntity):
@@ -131,6 +149,26 @@ class ShelterETASensor(SensorEntity):
         if self._alert_coordinator.is_active:
             shelter = self._alert_coordinator.get_best_shelter(self._person_id)
             return shelter.get("eta_minutes") if shelter else None
+        return self._nearest_eta()
+
+    def _nearest_eta(self):
+        if not self._coordinator.data:
+            return None
+        hass = self._coordinator.hass
+        state = hass.states.get(self._person_id) if hass else None
+        if state is None:
+            return None
+        lat = state.attributes.get("latitude")
+        lon = state.attributes.get("longitude")
+        if lat is None or lon is None:
+            return None
+        min_dist = float("inf")
+        for shelter in self._coordinator.data:
+            dist = haversine_distance(lat, lon, shelter["latitude"], shelter["longitude"])
+            if dist < min_dist:
+                min_dist = dist
+        if min_dist < float("inf"):
+            return calculate_eta_minutes(round(min_dist), "walking")
         return None
 
 

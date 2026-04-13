@@ -48,10 +48,10 @@ def test_cache_not_expired(cache: ShelterCache) -> None:
     loaded = cache.load()
     assert loaded == shelters
 
-def test_is_valid_property(cache: ShelterCache) -> None:
-    assert cache.is_valid is False
+def test_is_valid_method(cache: ShelterCache) -> None:
+    assert cache.is_valid() is False
     cache.save([{"id": "1", "name": "Test", "latitude": 0, "longitude": 0, "shelter_type": "shelter"}])
-    assert cache.is_valid is True
+    assert cache.is_valid() is True
 
 def test_corrupted_cache_returns_empty(cache: ShelterCache, cache_dir: Path) -> None:
     cache_file = cache_dir / "shelter_finder_cache.json"
