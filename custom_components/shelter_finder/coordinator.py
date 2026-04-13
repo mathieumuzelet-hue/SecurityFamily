@@ -89,7 +89,7 @@ class ShelterUpdateCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
                 return stale
             raise
 
-    async def async_request_refresh(self) -> None:
-        """Force a data refresh (invalidate cache first)."""
+    async def async_force_refresh(self) -> None:
+        """Invalidate cache and force a fresh Overpass fetch."""
         self.cache._ttl_seconds = 0
         await self.async_refresh()
