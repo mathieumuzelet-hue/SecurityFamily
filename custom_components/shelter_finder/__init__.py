@@ -54,6 +54,19 @@ PLATFORMS: list[Platform] = [
 ]
 
 
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    """Register the JS card as a Lovelace resource (once per HA instance)."""
+    hass.data.setdefault(DOMAIN, {})
+    hass.http.register_static_path(
+        "/shelter_finder",
+        str(Path(__file__).parent / "www"),
+        cache_headers=False,
+    )
+    from homeassistant.components.frontend import add_extra_js_url
+    add_extra_js_url(hass, "/shelter_finder/shelter-map-card.js")
+    return True
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Shelter Finder from a config entry."""
     hass.data.setdefault(DOMAIN, {})
@@ -87,12 +100,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         adaptive_radius_max=adaptive_radius_max,
     )
 
-    # Initial data fetch
-    try:
-        coordinator.data = await coordinator._async_update_data()
-    except Exception:
-        _LOGGER.warning("Initial Overpass fetch failed, continuing with empty data")
-        coordinator.data = []
+    # First refresh — populates coordinator.data and sets up auto-polling
+    await coordinator.async_config_entry_first_refresh()
 
     alert_coordinator = AlertCoordinator(
         hass=hass,
@@ -166,12 +175,21 @@ def _register_services(hass: HomeAssistant) -> None:
         ac = hass.data.get(DOMAIN, {}).get("alert_coordinator")
         if ac:
             ac.trigger(threat_type, triggered_by="service")
+            # Notify all coordinator entities of state change
+            for entry_data in hass.data.get(DOMAIN, {}).values():
+                if isinstance(entry_data, dict) and "coordinator" in entry_data:
+                    coord = entry_data["coordinator"]
+                    coord.async_set_updated_data(coord.data or [])
             await _send_alert_notifications(hass, ac, message)
 
     async def handle_cancel_alert(call: ServiceCall) -> None:
         ac = hass.data.get(DOMAIN, {}).get("alert_coordinator")
         if ac:
             ac.cancel()
+            for entry_data in hass.data.get(DOMAIN, {}).values():
+                if isinstance(entry_data, dict) and "coordinator" in entry_data:
+                    coord = entry_data["coordinator"]
+                    coord.async_set_updated_data(coord.data or [])
 
     async def handle_refresh_shelters(call: ServiceCall) -> None:
         for entry_data in hass.data.get(DOMAIN, {}).values():
@@ -179,7 +197,6 @@ def _register_services(hass: HomeAssistant) -> None:
                 await entry_data["coordinator"].async_request_refresh()
 
     async def handle_add_custom_poi(call: ServiceCall) -> None:
-        import asyncio
         name = call.data["name"]
         lat = call.data["latitude"]
         lon = call.data["longitude"]
@@ -189,7 +206,7 @@ def _register_services(hass: HomeAssistant) -> None:
         for entry_data in hass.data.get(DOMAIN, {}).values():
             if isinstance(entry_data, dict) and "cache" in entry_data:
                 cache = entry_data["cache"]
-                pois = await asyncio.to_thread(cache.load_pois)
+                pois = await hass.async_add_executor_job(cache.load_pois)
                 pois.append({
                     "id": uuid.uuid4().hex,
                     "name": name,
@@ -199,7 +216,7 @@ def _register_services(hass: HomeAssistant) -> None:
                     "notes": notes,
                     "source": "manual",
                 })
-                await asyncio.to_thread(cache.save_pois, pois)
+                await hass.async_add_executor_job(cache.save_pois, pois)
                 if "coordinator" in entry_data:
                     await entry_data["coordinator"].async_request_refresh()
 
@@ -208,6 +225,10 @@ def _register_services(hass: HomeAssistant) -> None:
         ac = hass.data.get(DOMAIN, {}).get("alert_coordinator")
         if ac:
             ac.confirm_safe(person)
+            for entry_data in hass.data.get(DOMAIN, {}).values():
+                if isinstance(entry_data, dict) and "coordinator" in entry_data:
+                    coord = entry_data["coordinator"]
+                    coord.async_set_updated_data(coord.data or [])
 
     hass.services.async_register(
         DOMAIN, "trigger_alert", handle_trigger_alert,
