@@ -170,10 +170,10 @@ class ShelterMapCard extends HTMLElement {
   _updateAlertBanner(hass) {
     var banner = this.shadowRoot ? this.shadowRoot.querySelector("#alert-banner") : null;
     if (!banner) return;
-    var alertSensor = hass.states["binary_sensor.alert"];
+    var alertSensor = hass.states["binary_sensor.shelter_finder_alert"];
     var isAlert = alertSensor && alertSensor.state === "on";
     if (isAlert) {
-      var alertType = hass.states["sensor.alert_type"];
+      var alertType = hass.states["sensor.shelter_finder_alert_type"];
       banner.textContent = "ALERTE: " + ((alertType ? alertType.state : "UNKNOWN").toUpperCase());
       banner.classList.add("active");
     } else {
@@ -219,8 +219,8 @@ class ShelterMapCard extends HTMLElement {
 
       // Update popup with nearest shelter info
       var personKey = entityId.split(".").pop();
-      var nearestState = hass.states["sensor." + personKey + "_shelter_nearest"];
-      var distState = hass.states["sensor." + personKey + "_shelter_distance"];
+      var nearestState = hass.states["sensor.shelter_finder_" + personKey + "_nearest"];
+      var distState = hass.states["sensor.shelter_finder_" + personKey + "_distance"];
 
       var popupHtml = "<b>" + name + "</b>";
       if (nearestState && nearestState.state && nearestState.state !== "unknown" && nearestState.state !== "unavailable") {
