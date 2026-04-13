@@ -142,10 +142,10 @@ class ShelterMapCard extends HTMLElement {
     if (!container) return;
 
     this._map = this._L.map(container, { zoomControl: true, attributionControl: true });
-    this._L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: "&copy; OpenStreetMap",
-      maxZoom: 19,
-      referrerPolicy: "origin",
+    this._L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
+      subdomains: "abcd",
+      maxZoom: 20,
     }).addTo(this._map);
 
     if (this._hass) {
@@ -219,8 +219,8 @@ class ShelterMapCard extends HTMLElement {
 
       // Update popup with nearest shelter info
       var personKey = entityId.split(".").pop();
-      var nearestState = hass.states["sensor.shelter_finder_" + personKey + "_nearest"];
-      var distState = hass.states["sensor.shelter_finder_" + personKey + "_distance"];
+      var nearestState = hass.states["sensor." + personKey + "_shelter_nearest"];
+      var distState = hass.states["sensor." + personKey + "_shelter_distance"];
 
       var popupHtml = "<b>" + name + "</b>";
       if (nearestState && nearestState.state && nearestState.state !== "unknown" && nearestState.state !== "unavailable") {
@@ -248,7 +248,7 @@ class ShelterMapCard extends HTMLElement {
     if (!L || !this._map) return;
 
     // Read all shelters from binary_sensor.alert attributes
-    var alertState = hass.states["binary_sensor.alert"];
+    var alertState = hass.states["binary_sensor.shelter_finder_alert"];
     if (!alertState || !alertState.attributes || !alertState.attributes.shelters) return;
 
     var shelters = alertState.attributes.shelters;
@@ -296,7 +296,7 @@ window.customCards.push({
 });
 
 console.info(
-  "%c SHELTER-MAP-CARD %c v0.2.1 ",
+  "%c SHELTER-MAP-CARD %c v0.2.2 ",
   "background:#3182ce;color:white;font-weight:bold;padding:2px 6px;border-radius:3px 0 0 3px",
   "background:#e2e8f0;padding:2px 6px;border-radius:0 3px 3px 0"
 );

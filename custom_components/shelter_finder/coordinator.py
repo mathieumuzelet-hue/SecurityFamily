@@ -46,7 +46,8 @@ class ShelterUpdateCoordinator:
 
     async def _async_update_data(self) -> list[dict[str, Any]]:
         """Fetch shelter data from cache or Overpass."""
-        if self.cache.is_valid:
+        cache_valid = await asyncio.to_thread(self.cache.is_valid)
+        if cache_valid:
             shelters = await asyncio.to_thread(self.cache.load)
             _LOGGER.debug("Using cached shelter data (%d shelters)", len(shelters))
         else:

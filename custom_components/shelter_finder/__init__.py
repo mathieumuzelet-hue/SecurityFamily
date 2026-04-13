@@ -179,6 +179,7 @@ def _register_services(hass: HomeAssistant) -> None:
                 await entry_data["coordinator"].async_request_refresh()
 
     async def handle_add_custom_poi(call: ServiceCall) -> None:
+        import asyncio
         name = call.data["name"]
         lat = call.data["latitude"]
         lon = call.data["longitude"]
@@ -188,7 +189,7 @@ def _register_services(hass: HomeAssistant) -> None:
         for entry_data in hass.data.get(DOMAIN, {}).values():
             if isinstance(entry_data, dict) and "cache" in entry_data:
                 cache = entry_data["cache"]
-                pois = cache.load_pois()
+                pois = await asyncio.to_thread(cache.load_pois)
                 pois.append({
                     "id": uuid.uuid4().hex,
                     "name": name,
@@ -198,7 +199,7 @@ def _register_services(hass: HomeAssistant) -> None:
                     "notes": notes,
                     "source": "manual",
                 })
-                cache.save_pois(pois)
+                await asyncio.to_thread(cache.save_pois, pois)
                 if "coordinator" in entry_data:
                     await entry_data["coordinator"].async_request_refresh()
 
@@ -233,6 +234,21 @@ def _register_services(hass: HomeAssistant) -> None:
     )
 
 
+def _find_mobile_app_service(hass: HomeAssistant, person_name: str) -> str | None:
+    """Find the notify service for a person by checking available services."""
+    # Try exact match first
+    candidate = f"mobile_app_{person_name}"
+    if hass.services.has_service("notify", candidate):
+        return candidate
+
+    # Try lowercase variants and partial matches
+    for service in hass.services.async_services().get("notify", {}):
+        if person_name.lower() in service.lower():
+            return service
+
+    return None
+
+
 async def _send_alert_notifications(hass: HomeAssistant, alert_coordinator: AlertCoordinator, message: str = "") -> None:
     """Send push notifications to all tracked persons."""
     for person_id in alert_coordinator.persons:
@@ -241,7 +257,7 @@ async def _send_alert_notifications(hass: HomeAssistant, alert_coordinator: Aler
             continue
 
         person_name = person_id.split(".")[-1]
-        device_service = f"mobile_app_{person_name}"
+        device_service = _find_mobile_app_service(hass, person_name)
 
         nav_url = (
             f"https://www.google.com/maps/dir/?api=1"
@@ -256,6 +272,14 @@ async def _send_alert_notifications(hass: HomeAssistant, alert_coordinator: Aler
         )
         if message:
             notif_message = f"{message}\n\n{notif_message}"
+
+        if device_service is None:
+            _LOGGER.warning(
+                "No mobile_app notify service found for %s — "
+                "check that the companion app is installed and the device name matches",
+                person_id,
+            )
+            continue
 
         try:
             await hass.services.async_call(
