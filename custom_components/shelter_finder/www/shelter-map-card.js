@@ -296,7 +296,7 @@ window.customCards.push({
 });
 
 console.info(
-  "%c SHELTER-MAP-CARD %c v0.4.0 ",
+  "%c SHELTER-MAP-CARD %c v0.4.1 ",
   "background:#3182ce;color:white;font-weight:bold;padding:2px 6px;border-radius:3px 0 0 3px",
   "background:#e2e8f0;padding:2px 6px;border-radius:0 3px 3px 0"
 );
