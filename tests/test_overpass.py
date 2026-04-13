@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import json
-from unittest.mock import AsyncMock
+from contextlib import asynccontextmanager
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -16,6 +16,27 @@ SAMPLE_OVERPASS_RESPONSE = {
         {"type": "way", "id": 345678, "center": {"lat": 48.8550, "lon": 2.3480}, "tags": {"railway": "station", "name": "Gare du Nord"}},
     ],
 }
+
+
+class MockResponse:
+    """Mock aiohttp response that works as an async context manager."""
+
+    def __init__(self, json_data, status=200):
+        self._json_data = json_data
+        self.status = status
+
+    async def json(self, content_type=None):
+        return self._json_data
+
+    def raise_for_status(self):
+        pass
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        pass
+
 
 def test_build_overpass_query() -> None:
     tags = ["amenity=shelter", "building=bunker"]
@@ -35,14 +56,8 @@ def test_build_overpass_query_wildcard() -> None:
 
 @pytest.mark.asyncio
 async def test_fetch_shelters_success() -> None:
-    mock_session = AsyncMock()
-    mock_response = AsyncMock()
-    mock_response.status = 200
-    mock_response.json = AsyncMock(return_value=SAMPLE_OVERPASS_RESPONSE)
-    mock_response.raise_for_status = AsyncMock()
-    mock_response.__aenter__ = AsyncMock(return_value=mock_response)
-    mock_response.__aexit__ = AsyncMock(return_value=False)
-    mock_session.post = AsyncMock(return_value=mock_response)
+    mock_session = MagicMock()
+    mock_session.post = MagicMock(return_value=MockResponse(SAMPLE_OVERPASS_RESPONSE))
 
     client = OverpassClient(session=mock_session)
     shelters = await client.fetch_shelters(48.85, 2.35, 2000)
@@ -57,14 +72,8 @@ async def test_fetch_shelters_success() -> None:
 
 @pytest.mark.asyncio
 async def test_fetch_shelters_empty_response() -> None:
-    mock_session = AsyncMock()
-    mock_response = AsyncMock()
-    mock_response.status = 200
-    mock_response.json = AsyncMock(return_value={"elements": []})
-    mock_response.raise_for_status = AsyncMock()
-    mock_response.__aenter__ = AsyncMock(return_value=mock_response)
-    mock_response.__aexit__ = AsyncMock(return_value=False)
-    mock_session.post = AsyncMock(return_value=mock_response)
+    mock_session = MagicMock()
+    mock_session.post = MagicMock(return_value=MockResponse({"elements": []}))
 
     client = OverpassClient(session=mock_session)
     shelters = await client.fetch_shelters(48.85, 2.35, 2000)
