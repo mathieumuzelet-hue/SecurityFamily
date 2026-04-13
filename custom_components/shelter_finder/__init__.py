@@ -116,6 +116,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     webhook_id = config.get(CONF_WEBHOOK_ID, entry.entry_id)
     webhook.async_register(hass, DOMAIN, "Shelter Finder Alert", webhook_id, async_handle_webhook)
 
+    # --- Register frontend static path ---
+    if not hass.data[DOMAIN].get("_static_registered"):
+        hass.http.register_static_path(
+            "/shelter_finder/shelter-map-card.js",
+            hass.config.path("custom_components/shelter_finder/www/shelter-map-card.js"),
+            cache_headers=True,
+        )
+        hass.data[DOMAIN]["_static_registered"] = True
+
+        # Auto-register Lovelace resource (storage mode only)
+        try:
+            resources = hass.data.get("lovelace", {}).get("resources")
+            if resources:
+                url = "/shelter_finder/shelter-map-card.js"
+                existing = [r for r in resources.async_items() if r.get("url") == url]
+                if not existing:
+                    await resources.async_create_item({"res_type": "module", "url": url})
+        except Exception:
+            _LOGGER.debug(
+                "Lovelace is in YAML mode or resources unavailable. "
+                "Add manually: resources: [{url: /shelter_finder/shelter-map-card.js, type: module}]"
+            )
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     # Onboarding notification
