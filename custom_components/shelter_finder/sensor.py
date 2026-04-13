@@ -65,7 +65,32 @@ class ShelterNearestSensor(SensorEntity):
     def _get_shelter(self):
         if self._alert_coordinator.is_active:
             return self._alert_coordinator.get_best_shelter(self._person_id)
-        return None
+
+        # In standby mode: find nearest shelter from cache
+        if not self._coordinator.data:
+            return None
+        try:
+            from homeassistant.core import HomeAssistant
+            hass = self._coordinator.hass
+            state = hass.states.get(self._person_id) if hass else None
+            if state is None:
+                return None
+            lat = state.attributes.get("latitude")
+            lon = state.attributes.get("longitude")
+            if lat is None or lon is None:
+                return None
+
+            from .routing import haversine_distance
+            nearest = None
+            min_dist = float("inf")
+            for shelter in self._coordinator.data:
+                dist = haversine_distance(lat, lon, shelter["latitude"], shelter["longitude"])
+                if dist < min_dist:
+                    min_dist = dist
+                    nearest = {**shelter, "distance_m": round(dist)}
+            return nearest
+        except Exception:
+            return None
 
 
 class ShelterDistanceSensor(SensorEntity):

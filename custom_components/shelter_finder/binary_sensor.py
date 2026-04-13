@@ -38,9 +38,18 @@ class ShelterAlertBinarySensor(BinarySensorEntity):
     @property
     def extra_state_attributes(self):
         ac = self._alert_coordinator
+        # Include all shelters from cache for the map card
+        shelters = self._coordinator.data or []
+        shelter_list = [
+            {"name": s.get("name", ""), "lat": s.get("latitude"), "lon": s.get("longitude"),
+             "type": s.get("shelter_type", ""), "source": s.get("source", "osm")}
+            for s in shelters if s.get("latitude") and s.get("longitude")
+        ]
         return {
             "threat_type": ac.threat_type,
             "triggered_at": str(ac.triggered_at) if ac.triggered_at else None,
             "triggered_by": ac.triggered_by,
             "persons_safe": ac.persons_safe,
+            "shelters": shelter_list,
+            "shelter_count": len(shelter_list),
         }

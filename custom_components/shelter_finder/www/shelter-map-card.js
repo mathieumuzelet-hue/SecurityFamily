@@ -151,12 +151,23 @@ class ShelterMapCard extends HTMLElement {
     }
   }
 
+  _findEntityId(hass, suffix) {
+    // Find entity_id ending with suffix, trying common patterns
+    var keys = Object.keys(hass.states);
+    for (var i = 0; i < keys.length; i++) {
+      if (keys[i].endsWith(suffix)) return keys[i];
+    }
+    return null;
+  }
+
   _updateAlertBanner() {
     var banner = this.shadowRoot ? this.shadowRoot.querySelector("#alert-banner") : null;
     if (!banner || !this._hass) return;
-    var alertSensor = this._hass.states["binary_sensor.shelter_finder_alert"];
+    var alertId = this._findEntityId(this._hass, "_alert") || "binary_sensor.alert";
+    var alertSensor = this._hass.states[alertId];
     var isAlert = alertSensor && alertSensor.state === "on";
-    var alertType = this._hass.states["sensor.shelter_finder_alert_type"];
+    var alertTypeId = this._findEntityId(this._hass, "_alert_type") || "sensor.alert_type";
+    var alertType = this._hass.states[alertTypeId];
     if (isAlert) {
       banner.textContent = "ALERTE: " + ((alertType ? alertType.state : "UNKNOWN").toUpperCase());
       banner.classList.add("active");
@@ -201,10 +212,12 @@ class ShelterMapCard extends HTMLElement {
         self._personMarkers.set(entityId, marker);
       }
 
-      // Update popup with shelter info
+      // Update popup with shelter info — find sensors by suffix pattern
       var personKey = entityId.split(".").pop();
-      var nearestState = hass.states["sensor.shelter_finder_" + personKey + "_nearest"];
-      var distState = hass.states["sensor.shelter_finder_" + personKey + "_distance"];
+      var nearestState = hass.states["sensor." + personKey + "_shelter_nearest"]
+        || hass.states["sensor.shelter_finder_" + personKey + "_nearest"];
+      var distState = hass.states["sensor." + personKey + "_shelter_distance"]
+        || hass.states["sensor.shelter_finder_" + personKey + "_distance"];
 
       var popupHtml = "<b>" + name + "</b>";
       if (nearestState && nearestState.state !== "unknown" && nearestState.state !== "unavailable") {
@@ -230,31 +243,32 @@ class ShelterMapCard extends HTMLElement {
   _updateShelterMarkers(hass) {
     var L = this._L;
     if (!L || !this._map) return;
-    var keys = Object.keys(hass.states);
-    var seenIds = new Set();
     var self = this;
 
-    for (var i = 0; i < keys.length; i++) {
-      var sensorId = keys[i];
-      if (!sensorId.startsWith("sensor.shelter_finder_") || !sensorId.endsWith("_nearest")) continue;
+    // Find the alert binary sensor (which contains all shelters in attributes)
+    var alertId = this._findEntityId(hass, "_alert");
+    if (!alertId) {
+      // Fallback: try common names
+      alertId = "binary_sensor.alert";
+    }
+    var alertState = hass.states[alertId];
+    if (!alertState || !alertState.attributes || !alertState.attributes.shelters) return;
 
-      var state = hass.states[sensorId];
-      if (!state || state.state === "unknown" || state.state === "unavailable") continue;
+    var shelters = alertState.attributes.shelters;
+    var seenIds = new Set();
 
-      var lat = state.attributes.latitude;
-      var lon = state.attributes.longitude;
-      var shelter_type = state.attributes.shelter_type;
-      var source = state.attributes.source;
-      if (lat == null || lon == null) continue;
+    for (var i = 0; i < shelters.length; i++) {
+      var s = shelters[i];
+      if (s.lat == null || s.lon == null) continue;
 
-      var markerId = lat + "," + lon;
+      var markerId = s.lat + "," + s.lon;
       if (seenIds.has(markerId)) continue;
       seenIds.add(markerId);
 
       if (!self._shelterMarkers.has(markerId)) {
-        var icon = createShelterIcon(L, shelter_type || "shelter");
-        var marker = L.marker([lat, lon], { icon: icon })
-          .bindPopup("<b>" + state.state + "</b><br>Type: " + (shelter_type || "?") + "<br>Source: " + (source || "osm"))
+        var icon = createShelterIcon(L, s.type || "shelter");
+        var marker = L.marker([s.lat, s.lon], { icon: icon })
+          .bindPopup("<b>" + (s.name || "Abri") + "</b><br>Type: " + (s.type || "?") + "<br>Source: " + (s.source || "osm"))
           .addTo(self._map);
         self._shelterMarkers.set(markerId, marker);
       }
