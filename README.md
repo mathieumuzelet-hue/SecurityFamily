@@ -14,6 +14,7 @@ Home Assistant custom integration that locates nearby shelters and guides your h
 - **Webhook support** for external alert triggers (FR-Alert compatible)
 - **Custom POIs** — add your own shelters (basement, neighbor's house, etc.)
 - **Offline-capable** — local cache ensures the system works without internet
+- **Interactive map** — Leaflet-based Lovelace card showing persons and shelters
 
 ## Installation
 
@@ -56,6 +57,34 @@ After installation, go to the integration's Options to configure:
 | `sensor.shelter_finder_alert_type` | Current threat type |
 | `button.shelter_finder_trigger_alert` | Trigger an alert |
 | `button.shelter_finder_cancel_alert` | Cancel the active alert |
+
+## Map Card
+
+After installation, add the Shelter Finder map to your dashboard:
+
+1. Edit your dashboard
+2. Click **+** (Add Card)
+3. Search for "Shelter Finder Map"
+4. Configure the card:
+
+```yaml
+type: custom:shelter-map-card
+title: Shelter Finder
+entities:
+  - person.alice
+  - person.bob
+default_zoom: 13
+height: 400px
+show_radius: true
+```
+
+The card shows:
+- **Person markers** — colored circles with initials, positioned by GPS
+- **Shelter markers** — icons by type (bunker, subway, school, etc.)
+- **Popups** — click a person to see their nearest shelter, click a shelter for details
+- **Alert banner** — red banner appears automatically when an alert is active
+
+The map card resource is registered automatically — no YAML editing needed.
 
 ## Services
 
