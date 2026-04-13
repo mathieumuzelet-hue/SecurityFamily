@@ -114,15 +114,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _register_services(hass)
 
     webhook_id = config.get(CONF_WEBHOOK_ID, entry.entry_id)
-    ha_webhook.async_register(hass, DOMAIN, "Shelter Finder Alert", webhook_id, async_handle_webhook)
+    try:
+        ha_webhook.async_register(hass, DOMAIN, "Shelter Finder Alert", webhook_id, async_handle_webhook)
+    except ValueError:
+        _LOGGER.debug("Webhook %s already registered, skipping", webhook_id)
 
     # --- Register frontend static path ---
     if not hass.data[DOMAIN].get("_static_registered"):
-        hass.http.register_static_path(
-            "/shelter_finder/shelter-map-card.js",
-            hass.config.path("custom_components/shelter_finder/www/shelter-map-card.js"),
-            cache_headers=True,
-        )
+        from homeassistant.components.http import StaticPathConfig
+        await hass.http.async_register_static_paths([
+            StaticPathConfig(
+                "/shelter_finder/shelter-map-card.js",
+                hass.config.path("custom_components/shelter_finder/www/shelter-map-card.js"),
+                True,
+            )
+        ])
         hass.data[DOMAIN]["_static_registered"] = True
 
         # Auto-register Lovelace resource (storage mode only)
