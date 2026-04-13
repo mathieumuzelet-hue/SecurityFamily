@@ -62,6 +62,13 @@ def _parse_element(element: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+FALLBACK_OVERPASS_URLS = [
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass-api.de/api/interpreter",
+    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+]
+
+
 class OverpassClient:
     def __init__(self, session: aiohttp.ClientSession, url: str = DEFAULT_OVERPASS_URL, tags: list[str] | None = None) -> None:
         self._session = session
@@ -70,10 +77,22 @@ class OverpassClient:
 
     async def fetch_shelters(self, lat: float, lon: float, radius: int) -> list[dict[str, Any]]:
         query = build_overpass_query(lat, lon, radius, self._tags)
-        resp_cm = await self._session.post(self._url, data={"data": query})
-        async with resp_cm as resp:
-            await resp.raise_for_status()
-            data = await resp.json()
+
+        # Try primary URL first, then fallbacks
+        urls = [self._url] + [u for u in FALLBACK_OVERPASS_URLS if u != self._url]
+        last_error = None
+        for url in urls:
+            try:
+                return await self._fetch_from_url(url, query)
+            except Exception as err:
+                _LOGGER.warning("Overpass %s failed: %s, trying next", url, err)
+                last_error = err
+        raise last_error
+
+    async def _fetch_from_url(self, url: str, query: str) -> list[dict[str, Any]]:
+        async with self._session.post(url, data={"data": query}, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+            resp.raise_for_status()
+            data = await resp.json(content_type=None)
         elements = data.get("elements", [])
         shelters = []
         for element in elements:
