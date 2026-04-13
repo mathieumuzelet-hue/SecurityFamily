@@ -1,0 +1,96 @@
+trigger_alert:
+  name: Trigger alert
+  description: Trigger a shelter alert for all tracked persons.
+  fields:
+    threat_type:
+      name: Threat type
+      description: Type of threat (storm, earthquake, attack, armed_conflict, flood, nuclear_chemical)
+      required: true
+      selector:
+        select:
+          options:
+            - storm
+            - earthquake
+            - attack
+            - armed_conflict
+            - flood
+            - nuclear_chemical
+    message:
+      name: Message
+      description: Optional message to include in notifications.
+      required: false
+      selector:
+        text:
+
+cancel_alert:
+  name: Cancel alert
+  description: Cancel the current shelter alert.
+
+refresh_shelters:
+  name: Refresh shelters
+  description: Force refresh of the shelter cache from Overpass API.
+
+add_custom_poi:
+  name: Add custom POI
+  description: Add a custom shelter point of interest.
+  fields:
+    name:
+      name: Name
+      description: Name of the shelter.
+      required: true
+      selector:
+        text:
+    latitude:
+      name: Latitude
+      description: GPS latitude.
+      required: true
+      selector:
+        number:
+          min: -90
+          max: 90
+          step: 0.000001
+          mode: box
+    longitude:
+      name: Longitude
+      description: GPS longitude.
+      required: true
+      selector:
+        number:
+          min: -180
+          max: 180
+          step: 0.000001
+          mode: box
+    shelter_type:
+      name: Shelter type
+      description: Type of shelter.
+      required: true
+      selector:
+        select:
+          options:
+            - bunker
+            - subway
+            - civic
+            - school
+            - worship
+            - shelter
+            - sports
+            - hospital
+            - government
+    notes:
+      name: Notes
+      description: Optional notes (access code, hours, etc.)
+      required: false
+      selector:
+        text:
+
+confirm_safe:
+  name: Confirm safe
+  description: Confirm that a person has reached safety.
+  fields:
+    person:
+      name: Person
+      description: Entity ID of the person (e.g., person.alice).
+      required: true
+      selector:
+        entity:
+          domain: person
