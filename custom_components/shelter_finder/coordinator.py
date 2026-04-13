@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import timedelta
 from typing import Any
@@ -46,12 +47,12 @@ class ShelterUpdateCoordinator:
     async def _async_update_data(self) -> list[dict[str, Any]]:
         """Fetch shelter data from cache or Overpass."""
         if self.cache.is_valid:
-            shelters = self.cache.load()
+            shelters = await asyncio.to_thread(self.cache.load)
             _LOGGER.debug("Using cached shelter data (%d shelters)", len(shelters))
         else:
             shelters = await self._fetch_from_overpass()
 
-        pois = self.cache.load_pois()
+        pois = await asyncio.to_thread(self.cache.load_pois)
         merged = merge_shelters_and_pois(shelters, pois)
         self.data = merged
         return merged
@@ -78,12 +79,12 @@ class ShelterUpdateCoordinator:
                     if len(shelters) >= 3:
                         break
 
-            self.cache.save(shelters)
+            await asyncio.to_thread(self.cache.save, shelters)
             return shelters
 
         except Exception as err:
             _LOGGER.warning("Overpass fetch failed: %s, trying stale cache", err)
-            stale = self.cache.load_stale()
+            stale = await asyncio.to_thread(self.cache.load_stale)
             if stale:
                 return stale
             raise
