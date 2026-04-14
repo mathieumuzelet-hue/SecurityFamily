@@ -290,7 +290,7 @@ class ShelterFinderOptionsFlow(OptionsFlow):
     async def async_step_advanced(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Step 4 — Avance (placeholder, filled in Task 10)."""
+        """Step 4 — Avance (Overpass URL + custom OSM tags)."""
         if user_input is not None:
             self._options.update(user_input)
             return self.async_create_entry(title="", data=self._options)
@@ -300,6 +300,10 @@ class ShelterFinderOptionsFlow(OptionsFlow):
             vol.Required(
                 CONF_OVERPASS_URL,
                 default=cur.get(CONF_OVERPASS_URL, DEFAULT_OVERPASS_URL),
+            ): str,
+            vol.Optional(
+                CONF_CUSTOM_OSM_TAGS,
+                default=cur.get(CONF_CUSTOM_OSM_TAGS, ""),
             ): str,
         })
         return self.async_show_form(step_id="advanced", data_schema=schema)

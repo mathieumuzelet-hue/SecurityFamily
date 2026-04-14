@@ -163,3 +163,62 @@ def test_step_notifications_submit_advances_to_advanced() -> None:
         "media_player.living_room",
         "media_player.kitchen",
     ]
+
+
+from custom_components.shelter_finder.const import CONF_CUSTOM_OSM_TAGS, CONF_OVERPASS_URL
+
+
+def test_step_advanced_renders_advanced_fields() -> None:
+    flow = _make_flow()
+    result = _run(flow.async_step_advanced())
+
+    assert result["type"] == "form"
+    assert result["step_id"] == "advanced"
+    schema_keys = {str(k) for k in result["data_schema"].schema.keys()}
+    for expected in (CONF_OVERPASS_URL, CONF_CUSTOM_OSM_TAGS):
+        assert expected in schema_keys, f"missing field {expected}"
+
+
+def test_step_advanced_submit_creates_entry_with_all_options() -> None:
+    flow = _make_flow()
+
+    # Walk through all four steps to accumulate options.
+    _run(flow.async_step_init(user_input={
+        CONF_SEARCH_RADIUS: 3000,
+        CONF_ADAPTIVE_RADIUS: False,
+        CONF_CACHE_TTL: 48,
+        CONF_PROVIDER_GEORISQUES: True,
+        CONF_PROVIDER_METEO_FRANCE: True,
+        CONF_PROVIDER_POLL_INTERVAL: 60,
+        CONF_PROVIDER_MIN_SEVERITY: "severe",
+        CONF_PROVIDER_AUTO_CANCEL: True,
+        CONF_PROVIDER_ALERT_RADIUS_KM: 15,
+    }))
+    _run(flow.async_step_routing(user_input={
+        CONF_OSRM_ENABLED: True,
+        CONF_OSRM_MODE: "public",
+        CONF_OSRM_URL: "https://router.project-osrm.org",
+        CONF_OSRM_TRANSPORT_MODE: "walking",
+    }))
+    _run(flow.async_step_notifications(user_input={
+        CONF_RE_NOTIFICATION_INTERVAL: 5,
+        CONF_MAX_RE_NOTIFICATIONS: 3,
+        CONF_TTS_ENABLED: False,
+        CONF_TTS_SERVICE: "auto",
+        CONF_TTS_MEDIA_PLAYERS: [],
+        CONF_TTS_VOLUME: 80,
+    }))
+    result = _run(flow.async_step_advanced(user_input={
+        CONF_OVERPASS_URL: "https://overpass.example.org/api/interpreter",
+        CONF_CUSTOM_OSM_TAGS: "amenity=shelter,building=bunker",
+    }))
+
+    assert result["type"] == "create_entry"
+    data = result["data"]
+    # Spot-check one key from each step.
+    assert data[CONF_SEARCH_RADIUS] == 3000
+    assert data[CONF_PROVIDER_GEORISQUES] is True
+    assert data[CONF_OSRM_ENABLED] is True
+    assert data[CONF_TTS_VOLUME] == 80
+    assert data[CONF_OVERPASS_URL] == "https://overpass.example.org/api/interpreter"
+    assert data[CONF_CUSTOM_OSM_TAGS] == "amenity=shelter,building=bunker"
