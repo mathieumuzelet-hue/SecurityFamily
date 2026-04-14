@@ -2,6 +2,11 @@
 
 All notable changes to Shelter Finder are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.4] — 2026-04-14
+
+### Added
+- New shelter type `police` with OSM tag `amenity=police`. Scored high for `attack` threats (9/10, just below bunker and metro) — police stations offer armed personnel, solid construction, and communications. Moderate score for `armed_conflict` (6/10, they may be targeted themselves) and standard for other threats. Extend or override via `shelter_finder_scores.yaml`.
+
 ## [0.6.3] — 2026-04-14
 
 Safety-critical scoring fix exposed by the v0.6.2 per-person refresh.
