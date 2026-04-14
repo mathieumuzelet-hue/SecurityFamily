@@ -32,6 +32,7 @@ from .const import (
     CONF_MAX_RE_NOTIFICATIONS,
     CONF_MIN_SEVERITY,
     CONF_OSRM_ENABLED,
+    CONF_OSRM_MODE,
     CONF_OSRM_URL,
     CONF_OVERPASS_URL,
     CONF_PERSONS,
@@ -52,6 +53,7 @@ from .const import (
     DEFAULT_MAX_RE_NOTIFICATIONS,
     DEFAULT_MIN_SEVERITY,
     DEFAULT_OSRM_ENABLED,
+    DEFAULT_OSRM_MODE,
     DEFAULT_OSRM_URL,
     DEFAULT_OVERPASS_URL,
     DEFAULT_POLLING_INTERVAL,
@@ -160,7 +162,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     osrm_enabled = config.get(CONF_OSRM_ENABLED, DEFAULT_OSRM_ENABLED)
     osrm_url = config.get(CONF_OSRM_URL, DEFAULT_OSRM_URL)
+    osrm_mode = config.get(CONF_OSRM_MODE, DEFAULT_OSRM_MODE)
     osrm_transport = config.get(CONF_OSRM_TRANSPORT_MODE, DEFAULT_OSRM_TRANSPORT_MODE)
+
+    # Safety net: warn if the declared OSRM mode doesn't match the URL shape.
+    # The mode is informational (selected in OptionsFlow "Routage") but the
+    # actual routing is driven by the URL. A mismatch usually means the user
+    # switched mode without updating the URL (or vice versa).
+    if osrm_enabled:
+        url_is_public_default = osrm_url.rstrip("/") == DEFAULT_OSRM_URL.rstrip("/")
+        if osrm_mode == "self_hosted" and url_is_public_default:
+            _LOGGER.warning(
+                "Shelter Finder: OSRM mode is 'self_hosted' but URL is still the "
+                "public default (%s). Update the OSRM URL in options or switch "
+                "the mode back to 'public'. Falling through with the configured URL.",
+                osrm_url,
+            )
+        elif osrm_mode == "public" and not url_is_public_default:
+            _LOGGER.warning(
+                "Shelter Finder: OSRM mode is 'public' but URL (%s) is not the "
+                "public default. If this is a self-hosted instance, switch the "
+                "mode to 'self_hosted' in options.",
+                osrm_url,
+            )
     transport_mode = "driving" if osrm_transport == "driving" else "foot"
     routing_service = RoutingService(
         session=session,
