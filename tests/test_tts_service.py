@@ -91,3 +91,54 @@ def test_build_message_unknown_eta_shows_question_mark() -> None:
         is_drill=False,
     )
     assert "environ ? minutes a pied." in msg
+
+
+from unittest.mock import MagicMock
+
+from custom_components.shelter_finder.tts_service import resolve_tts_service
+
+
+def _hass_with_tts_services(names: list[str]) -> MagicMock:
+    hass = MagicMock()
+    hass.services.async_services.return_value = {
+        "tts": {n: MagicMock() for n in names},
+        "notify": {"mobile_app_alice": MagicMock()},
+    }
+    return hass
+
+
+def test_resolve_tts_service_uses_configured_when_available() -> None:
+    hass = _hass_with_tts_services(["google_translate_say", "cloud_say"])
+    assert resolve_tts_service(hass, configured="cloud_say") == "cloud_say"
+
+
+def test_resolve_tts_service_falls_back_when_configured_missing() -> None:
+    hass = _hass_with_tts_services(["google_translate_say"])
+    # Configured "piper" is not available -> fall back to auto-detect.
+    assert resolve_tts_service(hass, configured="piper") == "google_translate_say"
+
+
+def test_resolve_tts_service_auto_detect_prefers_google() -> None:
+    hass = _hass_with_tts_services(["cloud_say", "google_translate_say", "speak"])
+    assert resolve_tts_service(hass, configured=None) == "google_translate_say"
+
+
+def test_resolve_tts_service_auto_detect_second_choice() -> None:
+    hass = _hass_with_tts_services(["cloud_say", "speak"])
+    assert resolve_tts_service(hass, configured=None) == "cloud_say"
+
+
+def test_resolve_tts_service_auto_detect_third_choice() -> None:
+    hass = _hass_with_tts_services(["speak"])
+    assert resolve_tts_service(hass, configured=None) == "speak"
+
+
+def test_resolve_tts_service_none_available_returns_none() -> None:
+    hass = MagicMock()
+    hass.services.async_services.return_value = {"notify": {}}
+    assert resolve_tts_service(hass, configured=None) is None
+
+
+def test_resolve_tts_service_empty_string_treated_as_none() -> None:
+    hass = _hass_with_tts_services(["google_translate_say"])
+    assert resolve_tts_service(hass, configured="") == "google_translate_say"

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from .const import THREAT_LABELS_FR
+from .const import THREAT_LABELS_FR, TTS_SERVICE_CANDIDATES
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,3 +30,25 @@ def build_message(
     if is_drill:
         return f"Ceci est un exercice. {body}"
     return body
+
+
+def resolve_tts_service(hass: Any, configured: str | None) -> str | None:
+    """Return the TTS service name to use, or None if none available.
+
+    Lookup order:
+    1. `configured` (from options) if registered in the `tts` domain.
+    2. First match in TTS_SERVICE_CANDIDATES that is registered.
+    3. None — caller should log and skip TTS.
+    """
+    tts_services = hass.services.async_services().get("tts", {}) or {}
+    if configured:
+        if configured in tts_services:
+            return configured
+        _LOGGER.warning(
+            "Configured TTS service tts.%s not found; falling back to auto-detect",
+            configured,
+        )
+    for candidate in TTS_SERVICE_CANDIDATES:
+        if candidate in tts_services:
+            return candidate
+    return None
