@@ -117,6 +117,7 @@ class ShelterMapCard extends HTMLElement {
       "#map { width: 100%; border-radius: 0 0 12px 12px; }" +
       ".alert-banner { background: #e53e3e; color: white; text-align: center; padding: 8px; font-weight: bold; font-size: 14px; letter-spacing: 1px; border-radius: 12px 12px 0 0; display: none; }" +
       ".alert-banner.active { display: block; }" +
+      ".alert-banner.drill { background: #d69e2e; }" +
       ".shelter-person-marker, .shelter-poi-marker { background: transparent !important; border: none !important; }" +
       "ha-card { overflow: hidden; }" +
       "@keyframes shelter-pulse { 0%,100% { transform:scale(1); opacity:0.25; } 50% { transform:scale(1.4); opacity:0.08; } }";
@@ -204,11 +205,20 @@ class ShelterMapCard extends HTMLElement {
     var alertSensor = hass.states["binary_sensor.alert"];
     var isAlert = alertSensor && alertSensor.state === "on";
     if (isAlert) {
-      var alertType = hass.states["sensor.alert_type"];
-      banner.textContent = "ALERTE: " + ((alertType ? alertType.state : "UNKNOWN").toUpperCase());
+      var attrs = alertSensor.attributes || {};
+      var threatType = (attrs.threat_type || "UNKNOWN").toString().toUpperCase();
+      var isDrill = attrs.drill === true;
+      if (isDrill) {
+        banner.textContent = "EXERCICE: " + threatType;
+        banner.classList.add("drill");
+      } else {
+        banner.textContent = "ALERTE: " + threatType;
+        banner.classList.remove("drill");
+      }
       banner.classList.add("active");
     } else {
       banner.classList.remove("active");
+      banner.classList.remove("drill");
     }
   }
 
@@ -371,7 +381,7 @@ window.customCards.push({
 });
 
 console.info(
-  "%c SHELTER-MAP-CARD %c v0.5.0 ",
+  "%c SHELTER-MAP-CARD %c v0.6.0-drill ",
   "background:#3182ce;color:white;font-weight:bold;padding:2px 6px;border-radius:3px 0 0 3px",
   "background:#e2e8f0;padding:2px 6px;border-radius:0 3px 3px 0"
 );
