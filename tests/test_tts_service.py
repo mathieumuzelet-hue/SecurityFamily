@@ -39,3 +39,55 @@ def test_tts_service_candidates_order() -> None:
         "cloud_say",
         "speak",
     ]
+
+
+from custom_components.shelter_finder.tts_service import build_message
+
+
+def test_build_message_real_alert() -> None:
+    msg = build_message(
+        threat_type="storm",
+        shelter_name="Ecole Jules Ferry",
+        distance_m=320,
+        eta_minutes=4,
+        is_drill=False,
+    )
+    assert msg == (
+        "Alerte tempete. Dirigez-vous vers Ecole Jules Ferry, "
+        "a 320 metres, environ 4 minutes a pied."
+    )
+
+
+def test_build_message_drill_has_prefix() -> None:
+    msg = build_message(
+        threat_type="attack",
+        shelter_name="Metro Republique",
+        distance_m=150,
+        eta_minutes=2,
+        is_drill=True,
+    )
+    assert msg.startswith("Ceci est un exercice. ")
+    assert "Alerte attaque." in msg
+    assert "Metro Republique" in msg
+
+
+def test_build_message_unknown_threat_falls_back_to_raw_key() -> None:
+    msg = build_message(
+        threat_type="unknown_threat",
+        shelter_name="Abri",
+        distance_m=100,
+        eta_minutes=1,
+        is_drill=False,
+    )
+    assert "Alerte unknown_threat." in msg
+
+
+def test_build_message_unknown_eta_shows_question_mark() -> None:
+    msg = build_message(
+        threat_type="flood",
+        shelter_name="Mairie",
+        distance_m=500,
+        eta_minutes=None,
+        is_drill=False,
+    )
+    assert "environ ? minutes a pied." in msg
