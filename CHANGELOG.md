@@ -2,6 +2,33 @@
 
 All notable changes to Shelter Finder are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.5] — 2026-04-14
+
+Cleanup sprint closing the remaining v0.6 enhancement backlog (#16, #17, #19,
+#20, #21). Audit-driven follow-up to PR #22 — most items were already resolved
+by earlier commits; this release verifies state, lands the one remaining code
+change (drill button per threat), and closes the issues.
+
+### Added
+- One drill button per entry in `THREAT_TYPES` (storm, earthquake, attack,
+  armed_conflict, flood, nuclear_chemical) so users can rehearse every
+  response plan, not just storm (#21 N4). The default storm drill button
+  keeps its legacy `unique_id` so existing installs are unaffected.
+
+### Internal
+- Audited and confirmed the following were already landed by earlier commits:
+  per-entry `hass.data[DOMAIN][entry.entry_id]` layout with services that
+  iterate over entries instead of reading a shared global (#16); closest-person
+  TTS selection via `min(..., key=distance_m)` and non-blocking announce via
+  `hass.async_create_task` (#17); `CONF_PROVIDER_ALERT_RADIUS_KM` schema uses
+  `vol.Coerce(float)` (#19); `AlertProviderManager.async_stop` logs non-
+  CancelledError exceptions at debug level (#20); `routing.py` has no duplicate
+  imports (#21 N1); `_haversine_km` lives in `_geo.haversine_km` (#21 N2);
+  `_parse_iso8601` lives in `alert_providers.base.parse_iso8601` (#21 N3);
+  regression test guards `get_best_shelter` against mutating cached shelter
+  dicts (#21 N6); `_FakeCoordinator.trigger` in the provider-manager tests
+  accepts `drill=False` (#21 N8).
+
 ## [0.6.4] — 2026-04-14
 
 ### Added

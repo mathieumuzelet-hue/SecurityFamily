@@ -61,3 +61,20 @@ async def test_drill_button_press(mock_coordinator, mock_alert_coordinator):
         "storm", triggered_by="button", drill=True
     )
     mock_coordinator.async_set_updated_data.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_drill_button_per_threat_press(mock_coordinator, mock_alert_coordinator):
+    """v0.6.5 — drill buttons accept a threat_type kwarg (one per THREAT_TYPES)."""
+    button = ShelterDrillButton(mock_coordinator, mock_alert_coordinator, threat_type="flood")
+    assert button.unique_id == "shelter_finder_drill_alert_flood"
+    await button.async_press()
+    mock_alert_coordinator.trigger.assert_called_once_with(
+        "flood", triggered_by="button", drill=True
+    )
+
+
+def test_drill_button_default_has_legacy_unique_id(mock_coordinator, mock_alert_coordinator):
+    """The default (storm) drill button keeps the legacy unique_id."""
+    button = ShelterDrillButton(mock_coordinator, mock_alert_coordinator)
+    assert button.unique_id == "shelter_finder_drill_alert"
