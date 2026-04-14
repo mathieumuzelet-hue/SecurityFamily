@@ -25,17 +25,23 @@ from .const import (
     CONF_CUSTOM_OSM_TAGS,
     CONF_DEFAULT_TRAVEL_MODE,
     CONF_MAX_RE_NOTIFICATIONS,
+    CONF_OSRM_ENABLED,
+    CONF_OSRM_URL,
     CONF_OVERPASS_URL,
     CONF_PERSONS,
     CONF_RE_NOTIFICATION_INTERVAL,
     CONF_SEARCH_RADIUS,
+    CONF_OSRM_TRANSPORT_MODE,
     CONF_WEBHOOK_ID,
     DEFAULT_ADAPTIVE_RADIUS_MAX,
     DEFAULT_CACHE_TTL,
     DEFAULT_MAX_RE_NOTIFICATIONS,
+    DEFAULT_OSRM_ENABLED,
+    DEFAULT_OSRM_URL,
     DEFAULT_OVERPASS_URL,
     DEFAULT_RADIUS,
     DEFAULT_RE_NOTIFICATION_INTERVAL,
+    DEFAULT_OSRM_TRANSPORT_MODE,
     DEFAULT_TRAVEL_MODE,
     DOMAIN,
     SHELTER_TYPES,
@@ -43,6 +49,7 @@ from .const import (
 )
 from .coordinator import ShelterUpdateCoordinator
 from .overpass import OverpassClient
+from .routing import RoutingService
 from .webhook import async_handle_webhook
 
 _LOGGER = logging.getLogger(__name__)
@@ -94,6 +101,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     custom_tags = [t.strip() for t in custom_tags_str.split(",") if t.strip()] if custom_tags_str else None
 
     session = async_get_clientsession(hass)
+
+    osrm_enabled = config.get(CONF_OSRM_ENABLED, DEFAULT_OSRM_ENABLED)
+    osrm_url = config.get(CONF_OSRM_URL, DEFAULT_OSRM_URL)
+    osrm_transport = config.get(CONF_OSRM_TRANSPORT_MODE, DEFAULT_OSRM_TRANSPORT_MODE)
+    transport_mode = "driving" if osrm_transport == "driving" else "foot"
+    routing_service = RoutingService(
+        session=session,
+        enabled=osrm_enabled,
+        url=osrm_url,
+        transport_mode=transport_mode,
+    )
+
     storage_dir = Path(hass.config.path(".storage"))
     cache = ShelterCache(storage_dir, ttl_hours=cache_ttl)
     overpass_client = OverpassClient(session=session, url=overpass_url, tags=custom_tags)
@@ -118,12 +137,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         travel_mode=travel_mode,
         re_notification_interval=re_notif_interval,
         max_re_notifications=max_re_notif,
+        routing_service=routing_service,
     )
 
     hass.data[DOMAIN][entry.entry_id] = {
         "coordinator": coordinator,
         "alert_coordinator": alert_coordinator,
         "cache": cache,
+        "routing_service": routing_service,
     }
     hass.data[DOMAIN]["alert_coordinator"] = alert_coordinator
 
@@ -279,7 +300,7 @@ def _find_mobile_app_service(hass: HomeAssistant, person_name: str) -> str | Non
 async def _send_alert_notifications(hass: HomeAssistant, alert_coordinator: AlertCoordinator, message: str = "") -> None:
     """Send push notifications to all tracked persons."""
     for person_id in alert_coordinator.persons:
-        best = alert_coordinator.get_best_shelter(person_id)
+        best = await alert_coordinator.get_best_shelter(person_id)
         if best is None:
             continue
 

@@ -91,3 +91,24 @@ def test_merge_deduplicates() -> None:
     merged = merge_shelters_and_pois(osm, pois)
     assert len(merged) == 1
     assert merged[0]["name"] == "Ma Cave"
+
+
+def test_rank_shelters_uses_extra_distances_when_provided() -> None:
+    from custom_components.shelter_finder.shelter_logic import rank_shelters
+
+    shelters = [
+        {"id": "s1", "latitude": 48.854, "longitude": 2.350, "shelter_type": "subway"},
+        {"id": "s2", "latitude": 48.858, "longitude": 2.340, "shelter_type": "bunker"},
+    ]
+    # Override: pretend OSRM tells us s2 is much closer than s1
+    overrides = {"s1": 5000.0, "s2": 100.0}
+    ranked = rank_shelters(
+        shelters, "attack", person_lat=48.8530, person_lon=2.3499,
+        extra_distances=overrides,
+    )
+    # s2 should now win with its short OSRM distance
+    assert ranked[0]["id"] == "s2"
+    assert ranked[0]["distance_m"] == 100
+    # s1 got the overridden long distance
+    s1 = next(s for s in ranked if s["id"] == "s1")
+    assert s1["distance_m"] == 5000

@@ -4,6 +4,30 @@ from __future__ import annotations
 
 import pytest
 
+from custom_components.shelter_finder.routing import RouteResult
+
+
+class FakeRoutingService:
+    """Test double — always returns OSRM results unless configured otherwise."""
+
+    def __init__(self, default_distance: float = 500.0, default_eta: float = 360.0) -> None:
+        self._d = default_distance
+        self._eta = default_eta
+
+    async def async_get_route(self, lat1, lon1, lat2, lon2) -> RouteResult:
+        return RouteResult(distance_m=self._d, eta_seconds=self._eta, source="osrm")
+
+    async def async_get_routes_batch(self, person_lat, person_lon, candidates, top_n=10):
+        return {
+            c["id"]: RouteResult(distance_m=self._d, eta_seconds=self._eta, source="osrm")
+            for c in candidates
+        }
+
+
+@pytest.fixture
+def fake_routing_service() -> FakeRoutingService:
+    return FakeRoutingService()
+
 
 @pytest.fixture
 def mock_persons() -> list[str]:

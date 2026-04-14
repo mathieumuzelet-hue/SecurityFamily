@@ -13,23 +13,27 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .alert_coordinator import AlertCoordinator
 from .const import CONF_PERSONS, DOMAIN
 from .coordinator import ShelterUpdateCoordinator
-from .routing import calculate_eta_minutes, haversine_distance
+from .routing import RoutingService, calculate_eta_minutes, haversine_distance
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     data = hass.data[DOMAIN][entry.entry_id]
     coordinator = data["coordinator"]
     alert_coordinator = data["alert_coordinator"]
+    routing_service = data.get("routing_service")
     persons = entry.data.get(CONF_PERSONS, [])
 
     entities: list[SensorEntity] = []
     for person_id in persons:
         person_name = person_id.split(".")[-1]
-        entities.append(ShelterNearestSensor(coordinator, alert_coordinator, person_id, person_name))
-        entities.append(ShelterDistanceSensor(coordinator, alert_coordinator, person_id, person_name))
-        entities.append(ShelterETASensor(coordinator, alert_coordinator, person_id, person_name))
+        n = ShelterNearestSensor(coordinator, alert_coordinator, person_id, person_name)
+        d = ShelterDistanceSensor(coordinator, alert_coordinator, person_id, person_name)
+        e = ShelterETASensor(coordinator, alert_coordinator, person_id, person_name)
+        for s in (n, d, e):
+            s._routing_service = routing_service
+        entities.extend([n, d, e])
     entities.append(ShelterAlertTypeSensor(coordinator, alert_coordinator))
-    async_add_entities(entities)
+    async_add_entities(entities, update_before_add=True)
 
 
 def _find_nearest_shelter(
@@ -45,6 +49,50 @@ def _find_nearest_shelter(
     return nearest
 
 
+async def _async_find_nearest_shelter(
+    routing_service: RoutingService | None,
+    shelters: list[dict[str, Any]],
+    lat: float,
+    lon: float,
+) -> dict[str, Any] | None:
+    if not shelters:
+        return None
+    # Ensure ids
+    normalized = []
+    for s in shelters:
+        if "id" not in s:
+            s = {**s, "id": f"{s.get('latitude')}_{s.get('longitude')}"}
+        normalized.append(s)
+
+    if routing_service is None:
+        best = None
+        best_dist = float("inf")
+        for s in normalized:
+            d = haversine_distance(lat, lon, s["latitude"], s["longitude"])
+            if d < best_dist:
+                best_dist = d
+                best = {**s, "distance_m": round(d), "route_source": "haversine",
+                        "eta_minutes": calculate_eta_minutes(d, "walking")}
+        return best
+
+    routes = await routing_service.async_get_routes_batch(lat, lon, normalized, top_n=10)
+    best = None
+    best_dist = float("inf")
+    for s in normalized:
+        r = routes.get(s["id"])
+        if r is None:
+            continue
+        if r.distance_m < best_dist:
+            best_dist = r.distance_m
+            best = {
+                **s,
+                "distance_m": round(r.distance_m),
+                "eta_minutes": round(r.eta_seconds / 60.0, 1),
+                "route_source": r.source,
+            }
+    return best
+
+
 def _get_person_coords(hass: HomeAssistant, person_id: str) -> tuple[float, float] | None:
     state = hass.states.get(person_id)
     if state is None:
@@ -56,7 +104,28 @@ def _get_person_coords(hass: HomeAssistant, person_id: str) -> tuple[float, floa
     return (lat, lon)
 
 
-class ShelterNearestSensor(CoordinatorEntity, SensorEntity):
+class _RoutingBackedSensorMixin:
+    """Shared resolver used by nearest/distance/ETA sensors."""
+
+    _routing_service = None
+    _cached_shelter: dict[str, Any] | None = None
+
+    async def _resolve_shelter(self) -> dict[str, Any] | None:
+        if self._alert_coordinator.is_active:
+            return await self._alert_coordinator.get_best_shelter(self._person_id)
+        shelters = self.coordinator.data or []
+        coords = _get_person_coords(self.hass, self._person_id)
+        if coords is None:
+            return None
+        return await _async_find_nearest_shelter(
+            self._routing_service, shelters, coords[0], coords[1]
+        )
+
+    async def async_update(self) -> None:
+        self._cached_shelter = await self._resolve_shelter()
+
+
+class ShelterNearestSensor(_RoutingBackedSensorMixin, CoordinatorEntity, SensorEntity):
     _attr_has_entity_name = True
     _attr_icon = "mdi:shield-home"
 
@@ -69,36 +138,25 @@ class ShelterNearestSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def native_value(self) -> str | None:
-        shelter = self._get_shelter()
-        return shelter["name"] if shelter else None
+        return self._cached_shelter["name"] if self._cached_shelter else None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        shelter = self._get_shelter()
-        if shelter is None:
+        s = self._cached_shelter
+        if s is None:
             return {}
         return {
-            "latitude": shelter.get("latitude"),
-            "longitude": shelter.get("longitude"),
-            "shelter_type": shelter.get("shelter_type"),
-            "source": shelter.get("source"),
-            "distance_m": shelter.get("distance_m"),
-            "score": shelter.get("score"),
+            "latitude": s.get("latitude"),
+            "longitude": s.get("longitude"),
+            "shelter_type": s.get("shelter_type"),
+            "source": s.get("source"),
+            "distance_m": s.get("distance_m"),
+            "score": s.get("score"),
+            "route_source": s.get("route_source"),
         }
 
-    def _get_shelter(self) -> dict[str, Any] | None:
-        if self._alert_coordinator.is_active:
-            return self._alert_coordinator.get_best_shelter(self._person_id)
-        shelters = self.coordinator.data or []
-        if not shelters:
-            return None
-        coords = _get_person_coords(self.hass, self._person_id)
-        if coords is None:
-            return None
-        return _find_nearest_shelter(shelters, coords[0], coords[1])
 
-
-class ShelterDistanceSensor(CoordinatorEntity, SensorEntity):
+class ShelterDistanceSensor(_RoutingBackedSensorMixin, CoordinatorEntity, SensorEntity):
     _attr_has_entity_name = True
     _attr_native_unit_of_measurement = "m"
     _attr_state_class = SensorStateClass.MEASUREMENT
@@ -113,20 +171,10 @@ class ShelterDistanceSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def native_value(self) -> int | None:
-        if self._alert_coordinator.is_active:
-            shelter = self._alert_coordinator.get_best_shelter(self._person_id)
-            return shelter["distance_m"] if shelter else None
-        shelters = self.coordinator.data or []
-        if not shelters:
-            return None
-        coords = _get_person_coords(self.hass, self._person_id)
-        if coords is None:
-            return None
-        nearest = _find_nearest_shelter(shelters, coords[0], coords[1])
-        return nearest["distance_m"] if nearest else None
+        return self._cached_shelter["distance_m"] if self._cached_shelter else None
 
 
-class ShelterETASensor(CoordinatorEntity, SensorEntity):
+class ShelterETASensor(_RoutingBackedSensorMixin, CoordinatorEntity, SensorEntity):
     _attr_has_entity_name = True
     _attr_native_unit_of_measurement = "min"
     _attr_icon = "mdi:clock-fast"
@@ -140,19 +188,9 @@ class ShelterETASensor(CoordinatorEntity, SensorEntity):
 
     @property
     def native_value(self) -> float | None:
-        if self._alert_coordinator.is_active:
-            shelter = self._alert_coordinator.get_best_shelter(self._person_id)
-            return shelter.get("eta_minutes") if shelter else None
-        shelters = self.coordinator.data or []
-        if not shelters:
+        if self._cached_shelter is None:
             return None
-        coords = _get_person_coords(self.hass, self._person_id)
-        if coords is None:
-            return None
-        nearest = _find_nearest_shelter(shelters, coords[0], coords[1])
-        if nearest:
-            return calculate_eta_minutes(nearest["distance_m"], "walking")
-        return None
+        return self._cached_shelter.get("eta_minutes")
 
 
 class ShelterAlertTypeSensor(CoordinatorEntity, SensorEntity):
