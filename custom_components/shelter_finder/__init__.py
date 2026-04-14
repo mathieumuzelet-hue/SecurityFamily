@@ -17,18 +17,27 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .alert_coordinator import AlertCoordinator
+from .alert_provider_manager import AlertProviderManager
+from .alert_providers.georisques import GeorisquesProvider
+from .alert_providers.meteo_france import MeteoFranceProvider
 from .cache import ShelterCache
 from .const import (
     CONF_ADAPTIVE_RADIUS,
     CONF_ADAPTIVE_RADIUS_MAX,
+    CONF_ALERT_RADIUS,
+    CONF_AUTO_CANCEL,
     CONF_CACHE_TTL,
     CONF_CUSTOM_OSM_TAGS,
     CONF_DEFAULT_TRAVEL_MODE,
     CONF_MAX_RE_NOTIFICATIONS,
+    CONF_MIN_SEVERITY,
     CONF_OSRM_ENABLED,
     CONF_OSRM_URL,
     CONF_OVERPASS_URL,
     CONF_PERSONS,
+    CONF_POLLING_INTERVAL,
+    CONF_PROVIDER_GEORISQUES,
+    CONF_PROVIDER_METEO_FRANCE,
     CONF_RE_NOTIFICATION_INTERVAL,
     CONF_SEARCH_RADIUS,
     CONF_OSRM_TRANSPORT_MODE,
@@ -38,17 +47,22 @@ from .const import (
     CONF_TTS_VOLUME,
     CONF_WEBHOOK_ID,
     DEFAULT_ADAPTIVE_RADIUS_MAX,
+    DEFAULT_AUTO_CANCEL,
     DEFAULT_CACHE_TTL,
     DEFAULT_MAX_RE_NOTIFICATIONS,
+    DEFAULT_MIN_SEVERITY,
     DEFAULT_OSRM_ENABLED,
     DEFAULT_OSRM_URL,
     DEFAULT_OVERPASS_URL,
+    DEFAULT_POLLING_INTERVAL,
     DEFAULT_RADIUS,
     DEFAULT_RE_NOTIFICATION_INTERVAL,
     DEFAULT_OSRM_TRANSPORT_MODE,
     DEFAULT_TRAVEL_MODE,
     DEFAULT_TTS_VOLUME,
     DOMAIN,
+    MAX_POLLING_INTERVAL,
+    MIN_POLLING_INTERVAL,
     SHELTER_TYPES,
     THREAT_TYPES,
 )
@@ -85,6 +99,42 @@ async def _register_frontend(hass: HomeAssistant) -> None:
     from homeassistant.components.frontend import add_extra_js_url
     add_extra_js_url(hass, "/shelter_finder/shelter-map-card.js")
     hass.data.setdefault(DOMAIN, {})["_frontend_registered"] = True
+
+
+def _build_alert_provider_manager(
+    hass: HomeAssistant,
+    session,
+    config: dict,
+    alert_coordinator: AlertCoordinator,
+    trigger_callback,
+) -> AlertProviderManager | None:
+    """Build the FR-Alert manager from config; returns None if no provider is enabled."""
+    providers = []
+    if config.get(CONF_PROVIDER_GEORISQUES, False):
+        providers.append(GeorisquesProvider(session=session))
+    if config.get(CONF_PROVIDER_METEO_FRANCE, False):
+        providers.append(MeteoFranceProvider(session=session))
+    if not providers:
+        return None
+
+    raw_interval = int(config.get(CONF_POLLING_INTERVAL, DEFAULT_POLLING_INTERVAL))
+    polling_interval = max(MIN_POLLING_INTERVAL, min(MAX_POLLING_INTERVAL, raw_interval))
+
+    # Default alert radius = same as shelter search radius (converted to km)
+    search_radius_m = config.get(CONF_SEARCH_RADIUS, DEFAULT_RADIUS)
+    default_radius_km = float(search_radius_m) / 1000.0
+    radius_km = float(config.get(CONF_ALERT_RADIUS, default_radius_km))
+
+    return AlertProviderManager(
+        hass=hass,
+        providers=providers,
+        alert_coordinator=alert_coordinator,
+        trigger_callback=trigger_callback,
+        polling_interval=polling_interval,
+        radius_km=radius_km,
+        auto_cancel=bool(config.get(CONF_AUTO_CANCEL, DEFAULT_AUTO_CANCEL)),
+        min_severity=config.get(CONF_MIN_SEVERITY, DEFAULT_MIN_SEVERITY),
+    )
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -164,6 +214,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN]["alert_coordinator"] = alert_coordinator
     hass.data[DOMAIN]["tts_service"] = tts_service
 
+    def _on_provider_trigger() -> None:
+        _notify_coordinators(hass)
+        hass.async_create_task(
+            _send_alert_notifications(hass, alert_coordinator, "")
+        )
+
+    provider_manager = _build_alert_provider_manager(
+        hass=hass,
+        session=session,
+        config=config,
+        alert_coordinator=alert_coordinator,
+        trigger_callback=_on_provider_trigger,
+    )
+    hass.data[DOMAIN][entry.entry_id]["alert_provider_manager"] = provider_manager
+    if provider_manager is not None:
+        await provider_manager.async_start()
+
     if not hass.services.has_service(DOMAIN, "trigger_alert"):
         _register_services(hass)
 
@@ -201,6 +268,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     config = {**entry.data, **entry.options}
     webhook_id = config.get(CONF_WEBHOOK_ID, entry.entry_id)
     ha_webhook.async_unregister(hass, webhook_id)
+
+    entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
+    provider_manager = entry_data.get("alert_provider_manager")
+    if provider_manager is not None:
+        await provider_manager.async_stop()
 
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
