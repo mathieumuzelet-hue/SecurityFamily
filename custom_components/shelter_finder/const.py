@@ -104,3 +104,67 @@ TRAVEL_SPEEDS = {
     "walking": 1.4,   # ~5 km/h
     "driving": 8.3,   # ~30 km/h (urban average)
 }
+
+# ---------------------------------------------------------------------------
+# v0.6 — FR-Alert providers (Sources & Rayon)
+# ---------------------------------------------------------------------------
+CONF_PROVIDER_GEORISQUES = "provider_georisques"
+CONF_PROVIDER_METEO_FRANCE = "provider_meteo_france"
+CONF_PROVIDER_POLL_INTERVAL = "provider_poll_interval"
+CONF_PROVIDER_MIN_SEVERITY = "provider_min_severity"
+CONF_PROVIDER_AUTO_CANCEL = "provider_auto_cancel"
+CONF_PROVIDER_ALERT_RADIUS_KM = "provider_alert_radius_km"
+
+DEFAULT_PROVIDER_GEORISQUES = False
+DEFAULT_PROVIDER_METEO_FRANCE = False
+DEFAULT_PROVIDER_POLL_INTERVAL = 60  # seconds
+PROVIDER_POLL_INTERVAL_MIN = 30
+PROVIDER_POLL_INTERVAL_MAX = 300
+DEFAULT_PROVIDER_MIN_SEVERITY = "severe"
+DEFAULT_PROVIDER_AUTO_CANCEL = True
+DEFAULT_PROVIDER_ALERT_RADIUS_KM = 10  # km
+
+SEVERITY_LEVELS = ["minor", "moderate", "severe", "extreme"]
+
+# ---------------------------------------------------------------------------
+# v0.6 — OSRM routing (Routage)
+# ---------------------------------------------------------------------------
+CONF_OSRM_MODE = "osrm_mode"
+CONF_OSRM_TRANSPORT_MODE = "osrm_transport_mode"
+
+DEFAULT_OSRM_ENABLED = False
+DEFAULT_OSRM_MODE = "public"
+DEFAULT_OSRM_URL = "https://router.project-osrm.org"
+DEFAULT_OSRM_TRANSPORT_MODE = "walking"
+
+OSRM_MODES = ["public", "self_hosted"]
+OSRM_TRANSPORT_MODES = ["walking", "driving"]
+
+# ---------------------------------------------------------------------------
+# v0.6 — TTS announcements (Notifications)
+# ---------------------------------------------------------------------------
+CONF_TTS_ENABLED = "tts_enabled"
+CONF_TTS_SERVICE = "tts_service"
+CONF_TTS_MEDIA_PLAYERS = "tts_media_players"
+CONF_TTS_VOLUME = "tts_volume"
+
+DEFAULT_TTS_ENABLED = False
+DEFAULT_TTS_SERVICE = "auto"
+DEFAULT_TTS_MEDIA_PLAYERS: list[str] = []
+DEFAULT_TTS_VOLUME = 80  # percent
+
+# French labels for threat types (used by TTS messages)
+THREAT_TYPE_LABELS_FR: dict[str, str] = {
+    "storm": "tempete",
+    "earthquake": "seisme",
+    "attack": "attaque",
+    "armed_conflict": "conflit arme",
+    "flood": "inondation",
+    "nuclear_chemical": "nucleaire chimique",
+}
+
+# ---------------------------------------------------------------------------
+# v0.6 — Drill mode (service parameter, scaffolded here for shared use)
+# ---------------------------------------------------------------------------
+CONF_DRILL = "drill"
+DEFAULT_DRILL = False

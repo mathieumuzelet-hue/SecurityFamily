@@ -18,7 +18,6 @@ from homeassistant.helpers.selector import (
 
 from .const import (
     CONF_ADAPTIVE_RADIUS,
-    CONF_ADAPTIVE_RADIUS_MAX,
     CONF_CACHE_TTL,
     CONF_CUSTOM_OSM_TAGS,
     CONF_DEFAULT_TRAVEL_MODE,
@@ -26,21 +25,51 @@ from .const import (
     CONF_LANGUAGE,
     CONF_MAX_RE_NOTIFICATIONS,
     CONF_OSRM_ENABLED,
+    CONF_OSRM_MODE,
+    CONF_OSRM_TRANSPORT_MODE,
     CONF_OSRM_URL,
     CONF_OVERPASS_URL,
     CONF_PERSONS,
+    CONF_PROVIDER_ALERT_RADIUS_KM,
+    CONF_PROVIDER_AUTO_CANCEL,
+    CONF_PROVIDER_GEORISQUES,
+    CONF_PROVIDER_METEO_FRANCE,
+    CONF_PROVIDER_MIN_SEVERITY,
+    CONF_PROVIDER_POLL_INTERVAL,
     CONF_RE_NOTIFICATION_INTERVAL,
     CONF_SEARCH_RADIUS,
+    CONF_TTS_ENABLED,
+    CONF_TTS_MEDIA_PLAYERS,
+    CONF_TTS_SERVICE,
+    CONF_TTS_VOLUME,
     CONF_WEBHOOK_ID,
-    DEFAULT_ADAPTIVE_RADIUS_MAX,
     DEFAULT_CACHE_TTL,
     DEFAULT_LANGUAGE,
     DEFAULT_MAX_RE_NOTIFICATIONS,
+    DEFAULT_OSRM_ENABLED,
+    DEFAULT_OSRM_MODE,
+    DEFAULT_OSRM_TRANSPORT_MODE,
+    DEFAULT_OSRM_URL,
     DEFAULT_OVERPASS_URL,
+    DEFAULT_PROVIDER_ALERT_RADIUS_KM,
+    DEFAULT_PROVIDER_AUTO_CANCEL,
+    DEFAULT_PROVIDER_GEORISQUES,
+    DEFAULT_PROVIDER_METEO_FRANCE,
+    DEFAULT_PROVIDER_MIN_SEVERITY,
+    DEFAULT_PROVIDER_POLL_INTERVAL,
     DEFAULT_RADIUS,
     DEFAULT_RE_NOTIFICATION_INTERVAL,
     DEFAULT_TRAVEL_MODE,
+    DEFAULT_TTS_ENABLED,
+    DEFAULT_TTS_MEDIA_PLAYERS,
+    DEFAULT_TTS_SERVICE,
+    DEFAULT_TTS_VOLUME,
     DOMAIN,
+    OSRM_MODES,
+    OSRM_TRANSPORT_MODES,
+    PROVIDER_POLL_INTERVAL_MAX,
+    PROVIDER_POLL_INTERVAL_MIN,
+    SEVERITY_LEVELS,
     THREAT_TYPES,
     TRAVEL_MODES,
 )
@@ -109,24 +138,172 @@ class ShelterFinderConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class ShelterFinderOptionsFlow(OptionsFlow):
+    """Multi-step options flow for Shelter Finder v0.6.
+
+    Steps:
+      1. init           -> Sources & Rayon
+      2. routing        -> Routage (OSRM)
+      3. notifications  -> Notifications (re-notif + TTS)
+      4. advanced       -> Avance (overpass_url, custom_osm_tags)
+    """
+
     def __init__(self, config_entry: ConfigEntry) -> None:
         self._config_entry = config_entry
+        self._options: dict[str, Any] = {}
 
-    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+    # ------------------------------------------------------------------ utils
+    def _current(self) -> dict[str, Any]:
+        """Return merged view of existing options over data (options wins)."""
+        merged: dict[str, Any] = {}
+        merged.update(self._config_entry.data or {})
+        merged.update(self._config_entry.options or {})
+        return merged
+
+    # ---------------------------------------------------------------- step 1
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Step 1 — Sources & Rayon."""
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            self._options.update(user_input)
+            return await self.async_step_routing()
 
-        current = self._config_entry.options or self._config_entry.data
+        cur = self._current()
 
-        return self.async_show_form(
-            step_id="init",
-            data_schema=vol.Schema({
-                vol.Required(CONF_SEARCH_RADIUS, default=current.get(CONF_SEARCH_RADIUS, DEFAULT_RADIUS)): int,
-                vol.Required(CONF_DEFAULT_TRAVEL_MODE, default=current.get(CONF_DEFAULT_TRAVEL_MODE, DEFAULT_TRAVEL_MODE)): vol.In(TRAVEL_MODES),
-                vol.Required(CONF_OVERPASS_URL, default=current.get(CONF_OVERPASS_URL, DEFAULT_OVERPASS_URL)): str,
-                vol.Required(CONF_CACHE_TTL, default=current.get(CONF_CACHE_TTL, DEFAULT_CACHE_TTL)): int,
-                vol.Required(CONF_ADAPTIVE_RADIUS, default=current.get(CONF_ADAPTIVE_RADIUS, True)): bool,
-                vol.Required(CONF_RE_NOTIFICATION_INTERVAL, default=current.get(CONF_RE_NOTIFICATION_INTERVAL, DEFAULT_RE_NOTIFICATION_INTERVAL)): int,
-                vol.Required(CONF_MAX_RE_NOTIFICATIONS, default=current.get(CONF_MAX_RE_NOTIFICATIONS, DEFAULT_MAX_RE_NOTIFICATIONS)): int,
-            }),
-        )
+        schema = vol.Schema({
+            vol.Required(
+                CONF_SEARCH_RADIUS,
+                default=cur.get(CONF_SEARCH_RADIUS, DEFAULT_RADIUS),
+            ): vol.All(int, vol.Range(min=500, max=50000)),
+            vol.Required(
+                CONF_ADAPTIVE_RADIUS,
+                default=cur.get(CONF_ADAPTIVE_RADIUS, True),
+            ): bool,
+            vol.Required(
+                CONF_CACHE_TTL,
+                default=cur.get(CONF_CACHE_TTL, DEFAULT_CACHE_TTL),
+            ): vol.All(int, vol.Range(min=1, max=168)),
+            vol.Required(
+                CONF_PROVIDER_GEORISQUES,
+                default=cur.get(CONF_PROVIDER_GEORISQUES, DEFAULT_PROVIDER_GEORISQUES),
+            ): bool,
+            vol.Required(
+                CONF_PROVIDER_METEO_FRANCE,
+                default=cur.get(CONF_PROVIDER_METEO_FRANCE, DEFAULT_PROVIDER_METEO_FRANCE),
+            ): bool,
+            vol.Required(
+                CONF_PROVIDER_POLL_INTERVAL,
+                default=cur.get(CONF_PROVIDER_POLL_INTERVAL, DEFAULT_PROVIDER_POLL_INTERVAL),
+            ): vol.All(int, vol.Range(min=PROVIDER_POLL_INTERVAL_MIN, max=PROVIDER_POLL_INTERVAL_MAX)),
+            vol.Required(
+                CONF_PROVIDER_MIN_SEVERITY,
+                default=cur.get(CONF_PROVIDER_MIN_SEVERITY, DEFAULT_PROVIDER_MIN_SEVERITY),
+            ): vol.In(SEVERITY_LEVELS),
+            vol.Required(
+                CONF_PROVIDER_AUTO_CANCEL,
+                default=cur.get(CONF_PROVIDER_AUTO_CANCEL, DEFAULT_PROVIDER_AUTO_CANCEL),
+            ): bool,
+            vol.Required(
+                CONF_PROVIDER_ALERT_RADIUS_KM,
+                default=cur.get(CONF_PROVIDER_ALERT_RADIUS_KM, DEFAULT_PROVIDER_ALERT_RADIUS_KM),
+            ): vol.All(int, vol.Range(min=1, max=200)),
+        })
+
+        return self.async_show_form(step_id="init", data_schema=schema)
+
+    # ---------------------------------------------------------------- step 2
+    async def async_step_routing(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Step 2 — Routage (OSRM)."""
+        if user_input is not None:
+            self._options.update(user_input)
+            return await self.async_step_notifications()
+
+        cur = self._current()
+        schema = vol.Schema({
+            vol.Required(
+                CONF_OSRM_ENABLED,
+                default=cur.get(CONF_OSRM_ENABLED, DEFAULT_OSRM_ENABLED),
+            ): bool,
+            vol.Required(
+                CONF_OSRM_MODE,
+                default=cur.get(CONF_OSRM_MODE, DEFAULT_OSRM_MODE),
+            ): vol.In(OSRM_MODES),
+            vol.Required(
+                CONF_OSRM_URL,
+                default=cur.get(CONF_OSRM_URL, DEFAULT_OSRM_URL),
+            ): str,
+            vol.Required(
+                CONF_OSRM_TRANSPORT_MODE,
+                default=cur.get(CONF_OSRM_TRANSPORT_MODE, DEFAULT_OSRM_TRANSPORT_MODE),
+            ): vol.In(OSRM_TRANSPORT_MODES),
+        })
+        return self.async_show_form(step_id="routing", data_schema=schema)
+
+    # ---------------------------------------------------------------- step 3
+    async def async_step_notifications(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Step 3 — Notifications (re-notif + TTS)."""
+        if user_input is not None:
+            self._options.update(user_input)
+            return await self.async_step_advanced()
+
+        cur = self._current()
+        schema = vol.Schema({
+            vol.Required(
+                CONF_RE_NOTIFICATION_INTERVAL,
+                default=cur.get(CONF_RE_NOTIFICATION_INTERVAL, DEFAULT_RE_NOTIFICATION_INTERVAL),
+            ): vol.All(int, vol.Range(min=1, max=60)),
+            vol.Required(
+                CONF_MAX_RE_NOTIFICATIONS,
+                default=cur.get(CONF_MAX_RE_NOTIFICATIONS, DEFAULT_MAX_RE_NOTIFICATIONS),
+            ): vol.All(int, vol.Range(min=0, max=20)),
+            vol.Required(
+                CONF_TTS_ENABLED,
+                default=cur.get(CONF_TTS_ENABLED, DEFAULT_TTS_ENABLED),
+            ): bool,
+            vol.Required(
+                CONF_TTS_SERVICE,
+                default=cur.get(CONF_TTS_SERVICE, DEFAULT_TTS_SERVICE),
+            ): str,
+            vol.Required(
+                CONF_TTS_MEDIA_PLAYERS,
+                default=cur.get(CONF_TTS_MEDIA_PLAYERS, DEFAULT_TTS_MEDIA_PLAYERS),
+            ): SelectSelector(
+                SelectSelectorConfig(
+                    options=[],
+                    multiple=True,
+                    custom_value=True,
+                    mode=SelectSelectorMode.LIST,
+                )
+            ),
+            vol.Required(
+                CONF_TTS_VOLUME,
+                default=cur.get(CONF_TTS_VOLUME, DEFAULT_TTS_VOLUME),
+            ): vol.All(int, vol.Range(min=0, max=100)),
+        })
+        return self.async_show_form(step_id="notifications", data_schema=schema)
+
+    # ---------------------------------------------------------------- step 4
+    async def async_step_advanced(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Step 4 — Avance (Overpass URL + custom OSM tags)."""
+        if user_input is not None:
+            self._options.update(user_input)
+            return self.async_create_entry(title="", data=self._options)
+
+        cur = self._current()
+        schema = vol.Schema({
+            vol.Required(
+                CONF_OVERPASS_URL,
+                default=cur.get(CONF_OVERPASS_URL, DEFAULT_OVERPASS_URL),
+            ): str,
+            vol.Optional(
+                CONF_CUSTOM_OSM_TAGS,
+                default=cur.get(CONF_CUSTOM_OSM_TAGS, ""),
+            ): str,
+        })
+        return self.async_show_form(step_id="advanced", data_schema=schema)
