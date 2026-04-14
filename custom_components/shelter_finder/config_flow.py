@@ -215,7 +215,7 @@ class ShelterFinderOptionsFlow(OptionsFlow):
     async def async_step_routing(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Step 2 — Routage (placeholder, filled in Task 6)."""
+        """Step 2 — Routage (OSRM)."""
         if user_input is not None:
             self._options.update(user_input)
             return await self.async_step_notifications()
@@ -226,6 +226,18 @@ class ShelterFinderOptionsFlow(OptionsFlow):
                 CONF_OSRM_ENABLED,
                 default=cur.get(CONF_OSRM_ENABLED, DEFAULT_OSRM_ENABLED),
             ): bool,
+            vol.Required(
+                CONF_OSRM_MODE,
+                default=cur.get(CONF_OSRM_MODE, DEFAULT_OSRM_MODE),
+            ): vol.In(OSRM_MODES),
+            vol.Required(
+                CONF_OSRM_URL,
+                default=cur.get(CONF_OSRM_URL, DEFAULT_OSRM_URL),
+            ): str,
+            vol.Required(
+                CONF_OSRM_TRANSPORT_MODE,
+                default=cur.get(CONF_OSRM_TRANSPORT_MODE, DEFAULT_OSRM_TRANSPORT_MODE),
+            ): vol.In(OSRM_TRANSPORT_MODES),
         })
         return self.async_show_form(step_id="routing", data_schema=schema)
 

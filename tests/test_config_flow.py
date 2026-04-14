@@ -74,3 +74,27 @@ def test_step_init_submit_advances_to_routing() -> None:
     # Submitted values must be persisted on the flow for the final create_entry.
     assert flow._options[CONF_PROVIDER_GEORISQUES] is True
     assert flow._options[CONF_PROVIDER_POLL_INTERVAL] == 90
+
+
+from custom_components.shelter_finder.const import (
+    CONF_OSRM_ENABLED,
+    CONF_OSRM_MODE,
+    CONF_OSRM_TRANSPORT_MODE,
+    CONF_OSRM_URL,
+)
+
+
+def test_step_routing_renders_all_osrm_fields() -> None:
+    flow = _make_flow()
+    result = _run(flow.async_step_routing())
+
+    assert result["type"] == "form"
+    assert result["step_id"] == "routing"
+    schema_keys = {str(k) for k in result["data_schema"].schema.keys()}
+    for expected in (
+        CONF_OSRM_ENABLED,
+        CONF_OSRM_MODE,
+        CONF_OSRM_URL,
+        CONF_OSRM_TRANSPORT_MODE,
+    ):
+        assert expected in schema_keys, f"missing field {expected}"
