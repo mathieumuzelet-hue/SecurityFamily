@@ -52,3 +52,25 @@ def resolve_tts_service(hass: Any, configured: str | None) -> str | None:
         if candidate in tts_services:
             return candidate
     return None
+
+
+_AVAILABLE_MEDIA_STATES = {"on", "idle", "playing", "paused"}
+
+
+def resolve_targets(hass: Any, configured: list[str] | None) -> list[str]:
+    """Return the list of media_player entity_ids to announce on.
+
+    - If `configured` is non-empty, use it as-is (user's explicit choice).
+    - Otherwise, scan all states and pick media_player entities whose state
+      is in {on, idle, playing, paused}. "off" and "unavailable" are skipped.
+    """
+    if configured:
+        return list(configured)
+    targets: list[str] = []
+    for state in hass.states.async_all():
+        entity_id = getattr(state, "entity_id", "")
+        if not entity_id.startswith("media_player."):
+            continue
+        if state.state in _AVAILABLE_MEDIA_STATES:
+            targets.append(entity_id)
+    return targets

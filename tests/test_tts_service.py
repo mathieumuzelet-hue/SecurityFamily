@@ -142,3 +142,46 @@ def test_resolve_tts_service_none_available_returns_none() -> None:
 def test_resolve_tts_service_empty_string_treated_as_none() -> None:
     hass = _hass_with_tts_services(["google_translate_say"])
     assert resolve_tts_service(hass, configured="") == "google_translate_say"
+
+
+from custom_components.shelter_finder.tts_service import resolve_targets
+
+
+def _state(entity_id: str, state: str) -> MagicMock:
+    s = MagicMock()
+    s.entity_id = entity_id
+    s.state = state
+    return s
+
+
+def test_resolve_targets_uses_configured_list() -> None:
+    hass = MagicMock()
+    configured = ["media_player.kitchen", "media_player.living_room"]
+    assert resolve_targets(hass, configured) == configured
+
+
+def test_resolve_targets_empty_config_scans_available_on_or_idle() -> None:
+    hass = MagicMock()
+    hass.states.async_all.return_value = [
+        _state("media_player.kitchen", "on"),
+        _state("media_player.bedroom", "idle"),
+        _state("media_player.garage", "off"),
+        _state("media_player.tv", "unavailable"),
+        _state("light.hall", "on"),  # not a media_player
+    ]
+    assert resolve_targets(hass, []) == [
+        "media_player.kitchen",
+        "media_player.bedroom",
+    ]
+
+
+def test_resolve_targets_none_config_treated_as_empty() -> None:
+    hass = MagicMock()
+    hass.states.async_all.return_value = [_state("media_player.kitchen", "on")]
+    assert resolve_targets(hass, None) == ["media_player.kitchen"]
+
+
+def test_resolve_targets_no_available_returns_empty() -> None:
+    hass = MagicMock()
+    hass.states.async_all.return_value = [_state("media_player.tv", "off")]
+    assert resolve_targets(hass, []) == []
