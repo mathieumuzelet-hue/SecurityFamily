@@ -255,3 +255,201 @@ async def test_tts_service_no_resolved_service_is_noop(caplog) -> None:
         )
     hass.services.async_call.assert_not_called()
     assert any("No TTS service available" in r.message for r in caplog.records)
+
+
+from unittest.mock import AsyncMock, call
+
+
+def _speaker_state(entity_id: str, volume_level: float | None, state: str = "idle") -> MagicMock:
+    s = MagicMock()
+    s.entity_id = entity_id
+    s.state = state
+    s.attributes = {} if volume_level is None else {"volume_level": volume_level}
+    return s
+
+
+def _hass_for_announce(targets_states: list[MagicMock], tts_services: list[str]) -> MagicMock:
+    hass = MagicMock()
+    hass.services.async_services.return_value = {
+        "tts": {n: MagicMock() for n in tts_services},
+    }
+    hass.services.async_call = AsyncMock()
+    # states.get(entity_id) returns matching state
+    by_id = {s.entity_id: s for s in targets_states}
+    hass.states.get = lambda eid: by_id.get(eid)
+    hass.states.async_all = MagicMock(return_value=targets_states)
+    return hass
+
+
+@pytest.mark.asyncio
+async def test_tts_service_full_flow_real_alert(monkeypatch) -> None:
+    sleeps: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(
+        "custom_components.shelter_finder.tts_service.asyncio.sleep", fake_sleep
+    )
+
+    kitchen = _speaker_state("media_player.kitchen", 0.25)
+    bedroom = _speaker_state("media_player.bedroom", 0.4)
+    hass = _hass_for_announce([kitchen, bedroom], ["google_translate_say"])
+
+    svc = TTSService(
+        hass=hass,
+        enabled=True,
+        configured_service=None,
+        configured_players=["media_player.kitchen", "media_player.bedroom"],
+        volume=0.8,
+    )
+
+    await svc.async_announce(
+        threat_type="storm",
+        shelters_by_person={
+            "person.alice": {"name": "Ecole", "distance_m": 300, "eta_minutes": 4},
+        },
+        is_drill=False,
+    )
+
+    calls = hass.services.async_call.await_args_list
+
+    # 1. Set volume 0.8 on both speakers
+    assert call(
+        "media_player", "volume_set",
+        {"entity_id": "media_player.kitchen", "volume_level": 0.8},
+        blocking=True,
+    ) in calls
+    assert call(
+        "media_player", "volume_set",
+        {"entity_id": "media_player.bedroom", "volume_level": 0.8},
+        blocking=True,
+    ) in calls
+
+    # 2. tts.google_translate_say on both
+    expected_message = (
+        "Alerte tempete. Dirigez-vous vers Ecole, a 300 metres, "
+        "environ 4 minutes a pied."
+    )
+    assert call(
+        "tts", "google_translate_say",
+        {"entity_id": "media_player.kitchen", "message": expected_message},
+        blocking=False,
+    ) in calls
+    assert call(
+        "tts", "google_translate_say",
+        {"entity_id": "media_player.bedroom", "message": expected_message},
+        blocking=False,
+    ) in calls
+
+    # 3. One sleep for estimated duration + 2s buffer
+    assert len(sleeps) == 1
+    assert sleeps[0] == estimate_duration_seconds(expected_message) + 2
+
+    # 4. Restore volumes
+    assert call(
+        "media_player", "volume_set",
+        {"entity_id": "media_player.kitchen", "volume_level": 0.25},
+        blocking=True,
+    ) in calls
+    assert call(
+        "media_player", "volume_set",
+        {"entity_id": "media_player.bedroom", "volume_level": 0.4},
+        blocking=True,
+    ) in calls
+
+
+@pytest.mark.asyncio
+async def test_tts_service_drill_prefix(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "custom_components.shelter_finder.tts_service.asyncio.sleep",
+        AsyncMock(),
+    )
+    kitchen = _speaker_state("media_player.kitchen", 0.3)
+    hass = _hass_for_announce([kitchen], ["speak"])
+    svc = TTSService(
+        hass=hass,
+        enabled=True,
+        configured_service="speak",
+        configured_players=["media_player.kitchen"],
+        volume=0.8,
+    )
+    await svc.async_announce(
+        threat_type="attack",
+        shelters_by_person={"person.alice": {"name": "Metro", "distance_m": 100, "eta_minutes": 2}},
+        is_drill=True,
+    )
+    # Find the tts.speak call and check message starts with drill prefix
+    tts_calls = [
+        c for c in hass.services.async_call.await_args_list
+        if c.args[:2] == ("tts", "speak")
+    ]
+    assert len(tts_calls) == 1
+    assert tts_calls[0].args[2]["message"].startswith("Ceci est un exercice. ")
+
+
+@pytest.mark.asyncio
+async def test_tts_service_restores_volume_even_if_speak_fails(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "custom_components.shelter_finder.tts_service.asyncio.sleep",
+        AsyncMock(),
+    )
+    kitchen = _speaker_state("media_player.kitchen", 0.2)
+    hass = _hass_for_announce([kitchen], ["google_translate_say"])
+
+    # Make tts.google_translate_say raise; volume_set must still succeed.
+    async def side_effect(domain, service, data, blocking=False):
+        if domain == "tts":
+            raise RuntimeError("TTS engine unreachable")
+        return None
+
+    hass.services.async_call = AsyncMock(side_effect=side_effect)
+
+    svc = TTSService(
+        hass=hass,
+        enabled=True,
+        configured_service=None,
+        configured_players=["media_player.kitchen"],
+        volume=0.8,
+    )
+    await svc.async_announce(
+        threat_type="storm",
+        shelters_by_person={"person.alice": {"name": "Abri", "distance_m": 200, "eta_minutes": 3}},
+        is_drill=False,
+    )
+
+    calls = hass.services.async_call.await_args_list
+    assert call(
+        "media_player", "volume_set",
+        {"entity_id": "media_player.kitchen", "volume_level": 0.2},
+        blocking=True,
+    ) in calls
+
+
+@pytest.mark.asyncio
+async def test_tts_service_missing_volume_level_skips_restore(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "custom_components.shelter_finder.tts_service.asyncio.sleep",
+        AsyncMock(),
+    )
+    no_vol = _speaker_state("media_player.weird", volume_level=None)
+    hass = _hass_for_announce([no_vol], ["google_translate_say"])
+    svc = TTSService(
+        hass=hass,
+        enabled=True,
+        configured_service=None,
+        configured_players=["media_player.weird"],
+        volume=0.8,
+    )
+    await svc.async_announce(
+        threat_type="storm",
+        shelters_by_person={"person.alice": {"name": "Abri", "distance_m": 100, "eta_minutes": 1}},
+        is_drill=False,
+    )
+    # Only one volume_set (the alert-level one); no restore since we had no baseline.
+    vol_set_calls = [
+        c for c in hass.services.async_call.await_args_list
+        if c.args[:2] == ("media_player", "volume_set")
+    ]
+    assert len(vol_set_calls) == 1
+    assert vol_set_calls[0].args[2]["volume_level"] == 0.8

@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
-from .const import THREAT_LABELS_FR, TTS_SERVICE_CANDIDATES
+from .const import DEFAULT_TTS_BUFFER_SECONDS, THREAT_LABELS_FR, TTS_SERVICE_CANDIDATES
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -131,5 +132,70 @@ class TTSService:
         if not shelters_by_person:
             _LOGGER.debug("No shelters to announce; skipping voice announcement")
             return
-        # Full flow implemented in Task 7.
-        raise NotImplementedError
+
+        # For now, use the first person's shelter to build the message.
+        # (Per-speaker personalization is out of scope for v0.6; spec says
+        # "closest person's shelter, or one message per person if multiple
+        # speakers" — we implement the "closest person" variant as the
+        # single-message flow; per-person routing can be added later.)
+        first_person, best = next(iter(shelters_by_person.items()))
+        message = build_message(
+            threat_type=threat_type,
+            shelter_name=best.get("name", "abri"),
+            distance_m=int(best.get("distance_m", 0)),
+            eta_minutes=best.get("eta_minutes"),
+            is_drill=is_drill,
+        )
+
+        # 1. Save current volumes (None when unavailable -> skip restore).
+        saved: dict[str, float | None] = {}
+        for eid in targets:
+            state = self.hass.states.get(eid)
+            if state is None:
+                saved[eid] = None
+                continue
+            saved[eid] = state.attributes.get("volume_level")
+
+        # 2. Set alert volume on each target (blocking so speak happens after).
+        for eid in targets:
+            try:
+                await self.hass.services.async_call(
+                    "media_player", "volume_set",
+                    {"entity_id": eid, "volume_level": self.volume},
+                    blocking=True,
+                )
+            except Exception:
+                _LOGGER.exception("Failed to set volume on %s", eid)
+
+        # 3. Speak on each target (non-blocking so they start in parallel).
+        for eid in targets:
+            try:
+                await self.hass.services.async_call(
+                    "tts", service,
+                    {"entity_id": eid, "message": message},
+                    blocking=False,
+                )
+            except Exception:
+                _LOGGER.exception("TTS call failed on %s", eid)
+
+        # 4. Wait for playback to finish + buffer.
+        wait_s = estimate_duration_seconds(message) + DEFAULT_TTS_BUFFER_SECONDS
+        await asyncio.sleep(wait_s)
+
+        # 5. Restore volumes (only where we captured a baseline).
+        for eid, prev in saved.items():
+            if prev is None:
+                continue
+            try:
+                await self.hass.services.async_call(
+                    "media_player", "volume_set",
+                    {"entity_id": eid, "volume_level": prev},
+                    blocking=True,
+                )
+            except Exception:
+                _LOGGER.exception("Failed to restore volume on %s", eid)
+
+        _LOGGER.debug(
+            "TTS announce done: threat=%s drill=%s targets=%s person=%s",
+            threat_type, is_drill, targets, first_person,
+        )
