@@ -1,73 +1,141 @@
-# Shelter Finder
+<p align="center">
+  <img src="docs/assets/logo.png" alt="Shelter Finder" width="340"/>
+</p>
 
-[![Tests](https://github.com/mathieumuzelet-hue/SecurityFamily/actions/workflows/tests.yml/badge.svg)](https://github.com/mathieumuzelet-hue/SecurityFamily/actions/workflows/tests.yml)
-[![HACS](https://github.com/mathieumuzelet-hue/SecurityFamily/actions/workflows/hacs.yml/badge.svg)](https://github.com/mathieumuzelet-hue/SecurityFamily/actions/workflows/hacs.yml)
+<p align="center">
+  <a href="https://github.com/mathieumuzelet-hue/SecurityFamily/actions/workflows/tests.yml"><img src="https://github.com/mathieumuzelet-hue/SecurityFamily/actions/workflows/tests.yml/badge.svg" alt="Tests"/></a>
+  <a href="https://github.com/mathieumuzelet-hue/SecurityFamily/actions/workflows/hacs.yml"><img src="https://github.com/mathieumuzelet-hue/SecurityFamily/actions/workflows/hacs.yml/badge.svg" alt="HACS"/></a>
+  <a href="https://github.com/mathieumuzelet-hue/SecurityFamily/releases"><img src="https://img.shields.io/github/v/release/mathieumuzelet-hue/SecurityFamily" alt="Release"/></a>
+</p>
 
-Home Assistant custom integration that locates nearby shelters and guides your household to safety during emergencies.
+---
 
-## Features
+## Français
 
-- **Real-time shelter detection** using OpenStreetMap (Overpass API)
-- **Threat-aware scoring** — different shelters for storms, earthquakes, attacks, floods, etc.
-- **Push notifications** with navigation links to the best shelter for each person
-- **Adaptive search radius** — automatically expands if few shelters are nearby
-- **Webhook support** for external alert triggers (FR-Alert compatible)
-- **Custom POIs** — add your own shelters (basement, neighbor's house, etc.)
-- **Offline-capable** — local cache ensures the system works without internet
-- **Interactive map** — Leaflet-based Lovelace card showing persons and shelters
+**Shelter Finder** est une intégration Home Assistant qui localise les abris proches de chaque membre du foyer et les guide vers le plus sûr en cas d'urgence (tempête, séisme, attaque, inondation, risque nucléaire/chimique, conflit armé).
+
+L'intégration combine la cartographie ouverte (OpenStreetMap via Overpass), un routage piéton réel (OSRM) et les flux d'alerte du gouvernement français (Georisques + Vigilance Meteo France) pour fournir, pour chaque personne, un capteur « meilleur abri » à jour en temps réel, avec distance et temps de marche.
+
+Elle peut être déclenchée manuellement, via webhook externe, ou automatiquement par les providers FR-Alert.
+
+## English
+
+**Shelter Finder** is a Home Assistant custom integration that locates nearby shelters for every household member and guides them to the safest one during emergencies (storm, earthquake, attack, flood, nuclear/chemical, armed conflict).
+
+It combines open mapping (OpenStreetMap via Overpass), real pedestrian routing (OSRM), and French government alert feeds (Georisques + Meteo France Vigilance) to provide a per-person "best shelter" sensor kept live with distance and walking time.
+
+Alerts can be fired manually, via an external webhook, or automatically by the FR-Alert providers.
+
+---
+
+## Version highlights
+
+### [v0.6.2](https://github.com/mathieumuzelet-hue/SecurityFamily/releases/tag/v0.6.2) — 2026-04-14
+
+- **Refresh par personne** — les abris sont désormais recherchés autour de la position actuelle de **chaque** personne, pas uniquement autour de `zone.home`. Avec 2 personnes éloignées, 2 zones sont couvertes. Fallback à `zone.home` si aucune personne n'a de position.
+- _Per-person shelter search — each person's live location is queried independently with adaptive radius, results merged + deduplicated._
+
+### [v0.6.1](https://github.com/mathieumuzelet-hue/SecurityFamily/releases/tag/v0.6.1) — 2026-04-14
+
+- Polish post-v0.6 : annonce TTS non-bloquante, sélection de la personne la plus proche pour l'annonce vocale, mapping neige/canicule Meteo France, DRY interne (helpers partagés), support multi-entry propre.
+
+### [v0.6.0](https://github.com/mathieumuzelet-hue/SecurityFamily/releases/tag/v0.6.0) — 2026-04-14
+
+- **Routage OSRM réel** avec fallback haversine automatique, cache LRU 5 min et pré-filtre top-N (#9)
+- **Mode exercice** — service `shelter_finder.trigger_alert` accepte `drill: true`, bannière jaune "EXERCICE", préfixe `[EXERCICE]` sur les push, préfixe vocal "Ceci est un exercice." (#10)
+- **Annonces vocales TTS** — lecture automatique en français sur les media_player (auto-détection du service TTS, sauvegarde/restauration du volume) (#11)
+- **Providers FR-Alert** — polling automatique de Georisques (inondations, séismes, risques industriels) et Meteo France Vigilance (tempêtes, inondations). Déclenche un alert Shelter Finder si la zone de menace recoupe le rayon configuré (#13)
+- **OptionsFlow 4 étapes** — Sources · Routage · Notifications · Avancé (#8)
+
+### [v0.5.0](https://github.com/mathieumuzelet-hue/SecurityFamily/releases/tag/v0.5.0) et antérieurs
+
+MVP : détection d'abris via Overpass, scoring par menace, notifications push avec lien navigation, rayon adaptatif, webhook, POI personnalisés, carte Lovelace Leaflet.
+
+→ **Le [CHANGELOG complet](CHANGELOG.md) détaille chaque version.**
+
+---
 
 ## Installation
 
-### HACS (recommended)
+### HACS (recommandé)
 
-1. Open HACS in Home Assistant
-2. Go to **Integrations** > **+** > Search "Shelter Finder"
-3. Install and restart Home Assistant
-4. Go to **Settings** > **Devices & Services** > **Add Integration** > "Shelter Finder"
+1. HACS → **Intégrations** → **+** → rechercher "Shelter Finder"
+2. Installer, redémarrer Home Assistant
+3. **Paramètres → Appareils & services → Ajouter une intégration → "Shelter Finder"**
 
-### Manual
+### Manuelle
 
-1. Copy `custom_components/shelter_finder/` to your HA `custom_components/` directory
-2. Restart Home Assistant
-3. Add the integration via Settings
+```bash
+# Copier le dossier dans votre HA
+cp -r custom_components/shelter_finder/ /config/custom_components/
+```
+
+Redémarrer HA, puis ajouter l'intégration via Paramètres.
+
+---
 
 ## Configuration
 
-### Setup (2 steps)
+### Install initial (2 étapes)
 
-1. **People & Radius**: Select which `person` entities to track and set the search radius
-2. **Threats**: Choose which threat types to enable and the default travel mode
+1. **Personnes & Rayon** — sélectionner les entités `person.*` à suivre, fixer le rayon de recherche (m)
+2. **Menaces** — cocher les types de menaces à activer, choisir le mode de transport par défaut
 
-### Options (reconfigurable)
+### Options (reconfigurable, 4 pages — v0.6)
 
-After installation, go to the integration's Options to configure:
-- Overpass API URL (for self-hosted instances)
-- Cache duration
-- Adaptive radius toggle
-- Re-notification settings
-
-## Entities
-
-| Entity | Description |
+| Page | Contenu |
 |---|---|
-| `sensor.{person}_shelter_nearest` | Name of the nearest/best shelter |
-| `sensor.{person}_shelter_distance` | Distance to recommended shelter (m) |
-| `sensor.{person}_shelter_eta` | Estimated time of arrival (min) |
-| `binary_sensor.alert` | Whether an alert is active |
-| `sensor.alert_type` | Current threat type |
-| `button.trigger_alert` | Trigger an alert |
-| `button.cancel_alert` | Cancel the active alert |
+| **Sources & Rayon** | Rayon adaptatif, URL Overpass, TTL cache, **providers Georisques / Meteo France**, intervalle de polling (30–300s), sévérité minimum, auto-annulation |
+| **Routage** | Activer OSRM, serveur public / self-hosted, mode piéton / voiture |
+| **Notifications** | Intervalle de re-notification, **annonces vocales TTS**, service TTS, media_player cibles, volume |
+| **Avancé** | Tags OSM custom, URL Overpass override |
 
-The `nearest` sensor also exposes `latitude`, `longitude`, `shelter_type`, `distance_m`, and `source` as attributes.
+---
 
-## Map Card
+## Comment identifier les capteurs utiles
 
-After installation, add the Shelter Finder map to your dashboard:
+Après installation, Shelter Finder crée automatiquement plusieurs entités. Voici comment les repérer dans Home Assistant.
 
-1. Edit your dashboard
-2. Click **+** (Add Card)
-3. Search for "Shelter Finder Map"
-4. Configure the card:
+### Dans **Paramètres → Appareils & services → Shelter Finder**
+
+L'intégration regroupe toutes ses entités. Ouvre la carte de l'intégration pour voir la liste complète.
+
+### Entités principales
+
+| Entité | Description | Exemple d'usage |
+|---|---|---|
+| `sensor.{person}_shelter_nearest` | Nom du meilleur abri pour cette personne | Afficher dans un card Markdown |
+| `sensor.{person}_shelter_distance` | Distance (m) vers l'abri recommandé | Automation : "si distance > 5000m, notifier" |
+| `sensor.{person}_shelter_eta` | Temps de trajet estimé (min) | Affichage sur dashboard |
+| `binary_sensor.alert` | `on` si une alerte est active | Trigger pour automations d'urgence |
+| `sensor.alert_type` | Type de menace courante (storm, flood...) | Adapter les notifications au type |
+| `button.trigger_alert` | Déclencher une alerte (tempête par défaut) | Bouton dashboard |
+| `button.cancel_alert` | Annuler l'alerte active | Bouton dashboard |
+| `button.drill` | Déclencher un **exercice** (v0.6) | Test mensuel, pas de panique |
+
+### Attributs utiles
+
+Le sensor `sensor.{person}_shelter_nearest` expose en attributs :
+- `latitude`, `longitude` — coordonnées de l'abri (pour lien navigation)
+- `shelter_type` — `subway`, `bunker`, `civic`, `school`...
+- `distance_m` — distance réelle (OSRM si activé, sinon haversine)
+- `eta_minutes` — temps de marche estimé
+- `route_source` — `"osrm"` ou `"haversine"` (v0.6)
+
+Le `binary_sensor.alert` expose :
+- `threat_type` — type de menace
+- `triggered_at` — timestamp de déclenchement
+- `triggered_by` — `"manual"`, `"webhook"`, `"georisques"`, `"meteo_france"` (v0.6)
+- `drill` — `true` si mode exercice (v0.6)
+- `persons_safe` — liste des personnes ayant confirmé être en sécurité
+
+### Truc rapide pour tout lister
+
+Dans **Outils de développement → États** : filtre par `shelter_finder` ou par nom de personne pour voir tous les capteurs disponibles en un coup d'œil.
+
+---
+
+## Carte Lovelace
 
 ```yaml
 type: custom:shelter-map-card
@@ -80,126 +148,146 @@ height: 400px
 show_radius: true
 ```
 
-The card shows:
-- **Person markers** — colored circles with initials, positioned by GPS
-- **Shelter markers** — icons by type (bunker, subway, school, etc.)
-- **Recommended shelter** — star marker with pulsing glow for each person's best option
-- **Route lines** — dashed line connecting each person to their recommended shelter
-- **Popups** — click a person to see their nearest shelter + distance + ETA
-- **Alert banner** — red banner appears automatically when an alert is active
+Affiche : marqueurs personnes (cercles colorés), marqueurs abris (icônes par type), **abri recommandé** avec étoile et halo pulsant, lignes de route pointillées, popups cliquables, **bannière d'alerte rouge** (ou jaune "EXERCICE" en mode drill v0.6).
 
-The map card resource is registered automatically — no YAML editing needed.
+La ressource JS est enregistrée automatiquement — pas de YAML à éditer.
+
+---
 
 ## Services
 
 | Service | Description |
 |---|---|
-| `shelter_finder.trigger_alert` | Trigger alert with a specific threat type |
-| `shelter_finder.cancel_alert` | Cancel the current alert |
-| `shelter_finder.refresh_shelters` | Force refresh shelter cache |
-| `shelter_finder.add_custom_poi` | Add a custom shelter location |
-| `shelter_finder.confirm_safe` | Confirm a person has reached safety |
+| `shelter_finder.trigger_alert` | Déclencher une alerte (param `threat_type`, optionnel `drill: true`, `message`) |
+| `shelter_finder.cancel_alert` | Annuler l'alerte active |
+| `shelter_finder.refresh_shelters` | Forcer un refresh du cache des abris |
+| `shelter_finder.add_custom_poi` | Ajouter un abri personnalisé (cave, voisin...) |
+| `shelter_finder.confirm_safe` | Confirmer qu'une personne est en sécurité |
 
-## Webhook
+---
 
-External systems can trigger alerts via webhook:
+## Webhook externe
 
 ```bash
-curl -X POST https://your-ha-instance/api/webhook/sf_xxxx \
+curl -X POST https://ton-ha/api/webhook/sf_xxxx \
   -H "Content-Type: application/json" \
   -d '{"threat_type": "storm", "source": "fr-alert"}'
 ```
 
-The webhook ID is shown in the integration's Options.
+L'ID webhook s'affiche dans les Options de l'intégration.
 
-## Threat Types
+---
 
-| Type | Key | Priority Shelters |
+## Types de menaces
+
+| Type | Clé | Abris prioritaires |
 |---|---|---|
-| Storm | `storm` | Metro stations, bunkers, public buildings |
-| Earthquake | `earthquake` | Open spaces, sports centers |
-| Attack | `attack` | Bunkers, metro, civic buildings |
-| Armed conflict | `armed_conflict` | Bunkers, metro stations |
-| Flood | `flood` | Civic buildings, schools, high ground |
-| Nuclear/Chemical | `nuclear_chemical` | Bunkers, sealed underground |
+| Tempête | `storm` | Métro, bunkers, bâtiments publics |
+| Séisme | `earthquake` | Espaces ouverts, centres sportifs |
+| Attaque | `attack` | Bunkers, métro, mairies |
+| Conflit armé | `armed_conflict` | Bunkers, métro |
+| Inondation | `flood` | Mairies, écoles, points hauts |
+| Nucléaire/Chimique | `nuclear_chemical` | Bunkers, sous-sols étanches |
 
-## Automation Ideas
+---
 
-Shelter Finder exposes enough data to build powerful safety automations. Here are ready-to-use examples.
+## Modèles d'automatisation
 
-### Auto-trigger alert from weather warnings
-
-Use the Met Office or Meteorologisk Institutt integration to trigger shelter alerts when severe weather is detected:
+### 1. Déclencher un exercice mensuel automatiquement (v0.6)
 
 ```yaml
 automation:
-  - alias: "Shelter alert on storm warning"
+  - alias: "Exercice Shelter Finder — 1er du mois à 11h"
     trigger:
-      - platform: state
-        entity_id: weather.home
-        attribute: forecast
+      - platform: time
+        at: "11:00:00"
     condition:
       - condition: template
-        value_template: >
-          {{ state_attr('weather.home', 'forecast')
-             | selectattr('condition', 'in', ['lightning-rainy', 'hail', 'exceptional'])
-             | list | count > 0 }}
+        value_template: "{{ now().day == 1 }}"
     action:
       - service: shelter_finder.trigger_alert
         data:
           threat_type: storm
-          message: "Alerte meteo automatique"
+          drill: true
+          message: "Exercice mensuel — pas de panique"
 ```
 
-### Notify when a family member is far from any shelter
-
-Send a notification if someone is more than 5km from the nearest shelter:
+### 2. Recevoir une notification avec lien navigation en cas d'alerte
 
 ```yaml
 automation:
-  - alias: "Far from shelter warning"
-    trigger:
-      - platform: numeric_state
-        entity_id: sensor.distant_shelter_distance
-        above: 5000
-    action:
-      - service: notify.mobile_app_your_phone
-        data:
-          title: "Shelter Finder"
-          message: >
-            {{ state_attr('sensor.distant_shelter_nearest', 'friendly_name').split(' ')[-1] }}
-            est a {{ states('sensor.distant_shelter_distance') }}m du premier abri.
-```
-
-### Send navigation link on alert
-
-When an alert triggers, send each person a Google Maps navigation link to their recommended shelter:
-
-```yaml
-automation:
-  - alias: "Navigation to shelter on alert"
+  - alias: "Notification abri sur alerte"
     trigger:
       - platform: state
         entity_id: binary_sensor.alert
         to: "on"
     action:
-      - service: notify.mobile_app_your_phone
+      - service: notify.mobile_app_pixel_mathieu
         data:
-          title: "ALERTE {{ states('sensor.alert_type') | upper }}"
+          title: >
+            {% if state_attr('binary_sensor.alert', 'drill') %}[EXERCICE] {% endif %}
+            ALERTE {{ states('sensor.alert_type') | upper }}
           message: >
-            Abri: {{ states('sensor.distant_shelter_nearest') }}
-            ({{ states('sensor.distant_shelter_distance') }}m, ~{{ states('sensor.distant_shelter_eta') }} min)
+            Abri : {{ states('sensor.mathieu_shelter_nearest') }}
+            ({{ states('sensor.mathieu_shelter_distance') }}m,
+            ~{{ states('sensor.mathieu_shelter_eta') }} min)
           data:
-            url: >
-              https://www.google.com/maps/dir/?api=1
-              &destination={{ state_attr('sensor.distant_shelter_nearest', 'latitude') }},{{ state_attr('sensor.distant_shelter_nearest', 'longitude') }}
-              &travelmode=walking
+            url: >-
+              https://www.google.com/maps/dir/?api=1&destination={{
+              state_attr('sensor.mathieu_shelter_nearest', 'latitude') }},{{
+              state_attr('sensor.mathieu_shelter_nearest', 'longitude') }}&travelmode=walking
             priority: high
 ```
 
-### Dashboard card showing shelter status
+### 3. Alerter si un proche est trop loin de tout abri
 
-Add a conditional card that changes based on alert state:
+```yaml
+automation:
+  - alias: "Alerte eloignement abri"
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.mathieu_shelter_distance
+        above: 5000
+        for: "00:10:00"
+    action:
+      - service: notify.mobile_app_pixel_mathieu
+        data:
+          title: "Shelter Finder"
+          message: >
+            Tu es a {{ states('sensor.mathieu_shelter_distance') }}m du premier abri.
+```
+
+### 4. Auto-annuler quand tout le monde est en sécurité
+
+```yaml
+automation:
+  - alias: "Auto-cancel alerte quand tout le monde en securite"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.alert
+        attribute: persons_safe
+    condition:
+      - condition: template
+        value_template: >
+          {{ state_attr('binary_sensor.alert', 'persons_safe') | length ==
+             state_attr('binary_sensor.alert', 'persons_total') | length }}
+    action:
+      - service: shelter_finder.cancel_alert
+```
+
+### 5. Forcer un refresh quotidien des abris (v0.6.2+ : par personne)
+
+```yaml
+automation:
+  - alias: "Refresh abris quotidien"
+    trigger:
+      - platform: time
+        at: "03:30:00"
+    action:
+      - service: shelter_finder.refresh_shelters
+```
+
+### 6. Dashboard conditionnel
 
 ```yaml
 type: conditional
@@ -209,66 +297,58 @@ conditions:
 card:
   type: markdown
   content: >
-    ## ALERTE {{ states('sensor.alert_type') | upper }}
+    ## {% if state_attr('binary_sensor.alert', 'drill') %}[EXERCICE] {% endif %}ALERTE
+    {{ states('sensor.alert_type') | upper }}
 
     | Personne | Abri | Distance | ETA |
     |---|---|---|---|
-    | Distant | {{ states('sensor.distant_shelter_nearest') }} | {{ states('sensor.distant_shelter_distance') }}m | {{ states('sensor.distant_shelter_eta') }} min |
+    | Mathieu | {{ states('sensor.mathieu_shelter_nearest') }} | {{ states('sensor.mathieu_shelter_distance') }}m | {{ states('sensor.mathieu_shelter_eta') }} min |
     | Delphine | {{ states('sensor.delphine_shelter_nearest') }} | {{ states('sensor.delphine_shelter_distance') }}m | {{ states('sensor.delphine_shelter_eta') }} min |
 ```
 
-### Webhook integration with FR-Alert
+### 7. Intégration webhook FR-Alert (système externe)
 
-Trigger Shelter Finder from external alert systems using the webhook:
-
-```yaml
-# Call from any system (curl, Node-RED, n8n, etc.)
-# The webhook ID is shown in Settings > Integrations > Shelter Finder
-curl -X POST https://your-ha/api/webhook/sf_xxxx \
+```bash
+# Depuis n'importe quel outil (curl, Node-RED, n8n...)
+curl -X POST https://ton-ha/api/webhook/sf_xxxx \
   -H "Content-Type: application/json" \
   -d '{"threat_type": "attack", "source": "fr-alert"}'
 ```
 
-### Auto-cancel alert when everyone is safe
+### 8. Annonce TTS personnalisée sur enceinte (v0.6)
+
+Par défaut, Shelter Finder annonce automatiquement l'alerte sur les media_player configurés (Options → Notifications). Pour une annonce additionnelle :
 
 ```yaml
 automation:
-  - alias: "Auto cancel when all safe"
+  - alias: "Annonce custom sur Echo salon"
     trigger:
-      - platform: template
-        value_template: >
-          {{ is_state('binary_sensor.alert', 'on')
-             and state_attr('binary_sensor.alert', 'persons_safe') | length
-                == state_attr('binary_sensor.alert', 'persons_safe') | length }}
-    condition:
-      - condition: state
+      - platform: state
         entity_id: binary_sensor.alert
-        state: "on"
+        to: "on"
     action:
-      - service: shelter_finder.cancel_alert
-      - service: notify.mobile_app_your_phone
+      - service: tts.google_translate_say
         data:
-          title: "Shelter Finder"
-          message: "Tout le monde est en securite. Alerte annulee."
+          entity_id: media_player.echo_salon
+          message: >
+            Attention, une alerte {{ states('sensor.alert_type') }} est active.
+            Rejoins {{ states('sensor.mathieu_shelter_nearest') }} au plus vite.
 ```
 
-### Track shelter proximity over time
+---
 
-Add `sensor.{person}_shelter_distance` to a history graph to see how close each family member typically is to a shelter during their daily routine:
+## Scoring personnalisé
 
-```yaml
-type: history-graph
-entities:
-  - entity: sensor.distant_shelter_distance
-  - entity: sensor.delphine_shelter_distance
-hours_to_show: 168
-title: Distance aux abris (7 jours)
-```
+Surcharger le scoring par défaut menace/abri en créant `shelter_finder_scores.yaml` dans le répertoire de config HA.
 
-## Custom Scores
+---
 
-Override the default threat/shelter scoring by creating `shelter_finder_scores.yaml` in your HA config directory.
+## Contribuer
 
-## License
+Issues et PRs bienvenus — voir les [issues ouvertes](https://github.com/mathieumuzelet-hue/SecurityFamily/issues).
+
+Pour le dev local : `pip install -r requirements_test.txt && pytest` (nécessite `homeassistant` + deps).
+
+## Licence
 
 MIT
