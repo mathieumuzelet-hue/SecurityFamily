@@ -189,3 +189,53 @@ def test_retrigger_real_after_drill_resets_flag(alert_coord: AlertCoordinator) -
     alert_coord.cancel()
     alert_coord.trigger("flood", triggered_by="manual")
     assert alert_coord.is_drill is False
+
+
+@pytest.mark.asyncio
+async def test_get_best_shelter_does_not_mutate_cached_shelter_dicts() -> None:
+    """Regression: get_best_shelter must not mutate coordinator's cached shelter dicts.
+
+    Previously, writing eta_minutes / route_source to the ranked result would
+    leak into self.shelter_coordinator.data and persist across alerts.
+    """
+    from custom_components.shelter_finder.alert_coordinator import AlertCoordinator
+
+    class FakeState:
+        def __init__(self, lat, lon):
+            self.attributes = {"latitude": lat, "longitude": lon}
+
+    class FakeStates:
+        def get(self, _): return FakeState(48.853, 2.3499)
+
+    class FakeHass:
+        states = FakeStates()
+
+    original_shelters = [
+        {"id": "s1", "latitude": 48.858, "longitude": 2.340, "shelter_type": "bunker"},
+    ]
+
+    class FakeCoord:
+        data = original_shelters
+
+    routing = _FakeRoutingService(overrides={
+        (48.853, 2.3499, 48.858, 2.34): RouteResult(
+            distance_m=450.0, eta_seconds=320.0, source="osrm"
+        ),
+    })
+
+    ac = AlertCoordinator(
+        hass=FakeHass(),
+        shelter_coordinator=FakeCoord(),
+        persons=["person.alice"],
+        travel_mode="walking",
+        routing_service=routing,
+    )
+    ac.trigger("attack")
+    best = await ac.get_best_shelter("person.alice")
+    assert best is not None
+    # The returned dict has the enrichment keys.
+    assert "eta_minutes" in best
+    assert "route_source" in best
+    # But the original cached shelter dict must NOT have been mutated.
+    assert "eta_minutes" not in original_shelters[0]
+    assert "route_source" not in original_shelters[0]
