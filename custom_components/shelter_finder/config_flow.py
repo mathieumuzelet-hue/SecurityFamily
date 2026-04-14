@@ -282,7 +282,7 @@ class ShelterFinderOptionsFlow(OptionsFlow):
             vol.Required(
                 CONF_TTS_VOLUME,
                 default=cur.get(CONF_TTS_VOLUME, DEFAULT_TTS_VOLUME),
-            ): vol.All(int, vol.Range(min=0, max=100)),
+            ): vol.All(vol.Coerce(float), vol.Range(min=0.0, max=1.0)),
         })
         return self.async_show_form(step_id="notifications", data_schema=schema)
 

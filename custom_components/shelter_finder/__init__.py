@@ -379,7 +379,7 @@ async def _send_alert_notifications(hass: HomeAssistant, alert_coordinator: Aler
     if tts_service is not None:
         try:
             is_drill = getattr(alert_coordinator, "is_drill", False)
-            shelters_by_person = build_shelters_by_person(alert_coordinator)
+            shelters_by_person = await build_shelters_by_person(alert_coordinator)
             await tts_service.async_announce(
                 threat_type=alert_coordinator.threat_type,
                 shelters_by_person=shelters_by_person,

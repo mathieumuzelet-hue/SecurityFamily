@@ -152,26 +152,14 @@ DEFAULT_TTS_ENABLED = False
 DEFAULT_TTS_SERVICE = "auto"
 DEFAULT_TTS_MEDIA_PLAYERS: list[str] = []
 
-# French labels for threat types (used by TTS messages)
-THREAT_TYPE_LABELS_FR: dict[str, str] = {
-    "storm": "tempete",
-    "earthquake": "seisme",
-    "attack": "attaque",
-    "armed_conflict": "conflit arme",
-    "flood": "inondation",
-    "nuclear_chemical": "nucleaire chimique",
-}
-
 # ---------------------------------------------------------------------------
 # v0.6 — Drill mode (service parameter, scaffolded here for shared use)
 # ---------------------------------------------------------------------------
 CONF_DRILL = "drill"
 DEFAULT_DRILL = False
 
-# --- TTS (v0.6) ---
-
-# French labels for threat types (used in voice announcements; ASCII-only to
-# maximize TTS engine compatibility — no accents).
+# French labels for threat types (used in voice announcements and UI;
+# ASCII-only to maximize TTS engine compatibility — no accents).
 THREAT_LABELS_FR: dict[str, str] = {
     "storm": "tempete",
     "earthquake": "seisme",
@@ -180,6 +168,9 @@ THREAT_LABELS_FR: dict[str, str] = {
     "flood": "inondation",
     "nuclear_chemical": "nucleaire chimique",
 }
+
+# Backwards-compat alias — OptionsFlow PR #8 exported THREAT_TYPE_LABELS_FR.
+THREAT_TYPE_LABELS_FR = THREAT_LABELS_FR
 
 # TTS defaults
 DEFAULT_TTS_VOLUME = 0.8  # 0.0-1.0, applied to media_player before speaking
