@@ -156,3 +156,46 @@ class RoutingService:
         cache.move_to_end(key)
         while len(cache) > self.cache_max:
             cache.popitem(last=False)
+
+    async def async_get_routes_batch(
+        self,
+        person_lat: float,
+        person_lon: float,
+        candidates: list[dict[str, Any]],
+        top_n: int = 10,
+    ) -> dict[str, RouteResult]:
+        """Return {candidate_id: RouteResult}.
+
+        Prefilters candidates by haversine and only queries OSRM for the top N
+        nearest. Remaining candidates receive a haversine RouteResult directly.
+        An `id` key must be present on each candidate.
+        """
+        # Compute haversine for all
+        scored = []
+        for c in candidates:
+            d = haversine_distance(person_lat, person_lon, c["latitude"], c["longitude"])
+            scored.append((d, c))
+        scored.sort(key=lambda x: x[0])
+
+        results: dict[str, RouteResult] = {}
+        top = scored[:top_n]
+        rest = scored[top_n:]
+
+        # OSRM for top N (parallel)
+        import asyncio as _asyncio
+        tasks = [
+            self.async_get_route(person_lat, person_lon, c["latitude"], c["longitude"])
+            for _, c in top
+        ]
+        if tasks:
+            top_results = await _asyncio.gather(*tasks)
+            for (_, c), r in zip(top, top_results):
+                results[c["id"]] = r
+
+        # Haversine for the rest
+        for d, c in rest:
+            results[c["id"]] = self._haversine_result(
+                person_lat, person_lon, c["latitude"], c["longitude"]
+            )
+
+        return results

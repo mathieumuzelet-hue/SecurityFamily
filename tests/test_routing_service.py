@@ -149,3 +149,51 @@ def test_warning_throttle_allows_first_log_then_suppresses() -> None:
     assert svc._should_log_warning(now=1000.0) is True
     assert svc._should_log_warning(now=1001.0) is False
     assert svc._should_log_warning(now=1000.0 + 601.0) is True
+
+
+@pytest.mark.asyncio
+async def test_batch_prefilters_to_top_n_then_queries_osrm() -> None:
+    # 5 candidates; batch should OSRM only top 2 by haversine
+    candidates = [
+        {"id": "a", "latitude": 48.854, "longitude": 2.350},   # closest
+        {"id": "b", "latitude": 48.858, "longitude": 2.340},   # 2nd
+        {"id": "c", "latitude": 48.900, "longitude": 2.300},   # far
+        {"id": "d", "latitude": 49.000, "longitude": 2.400},   # far
+        {"id": "e", "latitude": 48.700, "longitude": 2.500},   # far
+    ]
+    person_lat, person_lon = 48.8530, 2.3499
+
+    with aioresponses() as mocked:
+        # register wildcard-ish: any GET returns same payload
+        import re
+        mocked.get(
+            re.compile(r"https://router\.project-osrm\.org/.*"),
+            payload={"code": "Ok", "routes": [{"distance": 111.0, "duration": 80.0}]},
+            repeat=True,
+        )
+        async with aiohttp.ClientSession() as session:
+            svc = RoutingService(session=session, enabled=True)
+            results = await svc.async_get_routes_batch(
+                person_lat, person_lon, candidates, top_n=2,
+            )
+
+    # All 5 candidates got a result
+    assert set(results.keys()) == {"a", "b", "c", "d", "e"}
+    # Top 2 (a,b) → osrm; rest → haversine
+    assert results["a"].source == "osrm"
+    assert results["b"].source == "osrm"
+    assert results["c"].source == "haversine"
+    assert results["d"].source == "haversine"
+    assert results["e"].source == "haversine"
+
+
+@pytest.mark.asyncio
+async def test_batch_disabled_all_haversine() -> None:
+    candidates = [
+        {"id": "a", "latitude": 48.854, "longitude": 2.350},
+        {"id": "b", "latitude": 48.858, "longitude": 2.340},
+    ]
+    svc = RoutingService(session=None, enabled=False)
+    results = await svc.async_get_routes_batch(48.8530, 2.3499, candidates, top_n=2)
+    assert results["a"].source == "haversine"
+    assert results["b"].source == "haversine"
