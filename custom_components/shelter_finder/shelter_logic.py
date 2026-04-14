@@ -25,10 +25,20 @@ def score_shelter(shelter: dict[str, Any], threat_type: str, distance_m: float) 
     return type_score * 10.0 + distance_bonus
 
 
-def rank_shelters(shelters: list[dict[str, Any]], threat_type: str, person_lat: float, person_lon: float) -> list[dict[str, Any]]:
+def rank_shelters(
+    shelters: list[dict[str, Any]],
+    threat_type: str,
+    person_lat: float,
+    person_lon: float,
+    extra_distances: dict[str, float] | None = None,
+) -> list[dict[str, Any]]:
     scored = []
     for shelter in shelters:
-        distance = _haversine_distance(person_lat, person_lon, shelter["latitude"], shelter["longitude"])
+        shelter_id = shelter.get("id")
+        if extra_distances is not None and shelter_id in extra_distances:
+            distance = extra_distances[shelter_id]
+        else:
+            distance = _haversine_distance(person_lat, person_lon, shelter["latitude"], shelter["longitude"])
         s = score_shelter(shelter, threat_type, distance)
         scored.append({**shelter, "distance_m": round(distance), "score": s})
     scored.sort(key=lambda x: x["score"], reverse=True)
