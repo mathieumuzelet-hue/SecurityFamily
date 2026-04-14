@@ -30,12 +30,13 @@ class _StubRoutingService:
         key = (round(lat1, 4), round(lon1, 4), round(lat2, 4), round(lon2, 4))
         return self._routes[key]
 
-    async def async_get_routes_batch(self, origin, candidates, **_kw):
-        lat1, lon1 = origin
-        return [
-            await self.async_get_route(lat1, lon1, lat2, lon2)
-            for (lat2, lon2) in candidates
-        ]
+    async def async_get_routes_batch(self, lat1, lon1, shelters, top_n=10):
+        out = {}
+        for s in shelters[:top_n]:
+            lat2 = s["latitude"]
+            lon2 = s["longitude"]
+            out[s["id"]] = await self.async_get_route(lat1, lon1, lat2, lon2)
+        return out
 
 
 class _FakeState:
