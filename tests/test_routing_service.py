@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import aiohttp
 import pytest
 from aioresponses import aioresponses
@@ -111,3 +113,39 @@ async def test_osrm_second_call_is_cached() -> None:
     assert second.source == "osrm"
     assert second.distance_m == 500.0
     # Only 1 mocked response was registered; a second call would fail the mock
+
+
+@pytest.mark.asyncio
+async def test_osrm_http_error_falls_back_to_haversine() -> None:
+    with aioresponses() as mocked:
+        mocked.get(
+            "https://router.project-osrm.org/route/v1/foot/"
+            "2.3499,48.853;2.3376,48.8606?overview=false",
+            status=500,
+        )
+        async with aiohttp.ClientSession() as session:
+            svc = RoutingService(session=session, enabled=True)
+            result = await svc.async_get_route(48.8530, 2.3499, 48.8606, 2.3376)
+    assert result.source == "haversine"
+    assert result.distance_m > 0
+
+
+@pytest.mark.asyncio
+async def test_osrm_timeout_falls_back_to_haversine() -> None:
+    with aioresponses() as mocked:
+        mocked.get(
+            "https://router.project-osrm.org/route/v1/foot/"
+            "2.3499,48.853;2.3376,48.8606?overview=false",
+            exception=asyncio.TimeoutError(),
+        )
+        async with aiohttp.ClientSession() as session:
+            svc = RoutingService(session=session, enabled=True, timeout_s=0.1)
+            result = await svc.async_get_route(48.8530, 2.3499, 48.8606, 2.3376)
+    assert result.source == "haversine"
+
+
+def test_warning_throttle_allows_first_log_then_suppresses() -> None:
+    svc = RoutingService(session=None, enabled=True, warn_throttle_s=600.0)
+    assert svc._should_log_warning(now=1000.0) is True
+    assert svc._should_log_warning(now=1001.0) is False
+    assert svc._should_log_warning(now=1000.0 + 601.0) is True

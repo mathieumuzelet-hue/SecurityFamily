@@ -55,6 +55,7 @@ class RoutingService:
         timeout_s: float = 5.0,
         cache_ttl_s: float = 300.0,
         cache_max: int = 500,
+        warn_throttle_s: float = 600.0,
     ) -> None:
         self.session = session
         self.enabled = enabled
@@ -63,6 +64,8 @@ class RoutingService:
         self.timeout_s = timeout_s
         self.cache_ttl_s = cache_ttl_s
         self.cache_max = cache_max
+        self.warn_throttle_s = warn_throttle_s
+        self._last_warn_at: float = 0.0
 
     async def async_get_route(
         self,
@@ -104,9 +107,15 @@ class RoutingService:
             self._maybe_log_warning(err)
             return self._haversine_result(lat1, lon1, lat2, lon2)
 
+    def _should_log_warning(self, now: float) -> bool:
+        if now - self._last_warn_at >= self.warn_throttle_s:
+            self._last_warn_at = now
+            return True
+        return False
+
     def _maybe_log_warning(self, err: Exception) -> None:
-        # Stub; Task 5 throttles this
-        _LOGGER.warning("OSRM call failed, falling back to haversine: %s", err)
+        if self._should_log_warning(time.monotonic()):
+            _LOGGER.warning("OSRM call failed, falling back to haversine: %s", err)
 
     def _haversine_result(
         self, lat1: float, lon1: float, lat2: float, lon2: float,
