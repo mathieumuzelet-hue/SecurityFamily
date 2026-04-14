@@ -86,3 +86,50 @@ def estimate_duration_seconds(message: str) -> int:
     """Estimate TTS playback time in seconds, with a 3s floor."""
     raw = math.ceil(len(message) / _CHARS_PER_SECOND)
     return max(raw, _MIN_DURATION_SECONDS)
+
+
+class TTSService:
+    """Encapsulates the alert voice-announcement flow."""
+
+    def __init__(
+        self,
+        hass: Any,
+        enabled: bool,
+        configured_service: str | None,
+        configured_players: list[str] | None,
+        volume: float,
+    ) -> None:
+        self.hass = hass
+        self.enabled = enabled
+        self.configured_service = configured_service
+        self.configured_players = list(configured_players or [])
+        self.volume = volume
+
+    async def async_announce(
+        self,
+        threat_type: str,
+        shelters_by_person: dict[str, dict[str, Any]],
+        is_drill: bool = False,
+    ) -> None:
+        """Announce the alert on configured (or auto-detected) media_players.
+
+        `shelters_by_person` maps person_entity_id -> best-shelter dict with
+        keys "name", "distance_m", "eta_minutes".
+        """
+        if not self.enabled:
+            return
+        service = resolve_tts_service(self.hass, self.configured_service)
+        if service is None:
+            _LOGGER.warning(
+                "No TTS service available (domain 'tts'); skipping voice announcement"
+            )
+            return
+        targets = resolve_targets(self.hass, self.configured_players)
+        if not targets:
+            _LOGGER.warning("No media_player targets available; skipping voice announcement")
+            return
+        if not shelters_by_person:
+            _LOGGER.debug("No shelters to announce; skipping voice announcement")
+            return
+        # Full flow implemented in Task 7.
+        raise NotImplementedError

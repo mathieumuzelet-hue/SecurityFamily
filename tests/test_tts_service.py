@@ -209,3 +209,49 @@ def test_estimate_duration_rounds_up() -> None:
 def test_estimate_duration_medium_message() -> None:
     # 75 chars / 15 cps = 5s
     assert estimate_duration_seconds("x" * 75) == 5
+
+
+import pytest
+
+from custom_components.shelter_finder.tts_service import TTSService
+
+
+@pytest.mark.asyncio
+async def test_tts_service_disabled_is_noop() -> None:
+    hass = MagicMock()
+    hass.services.async_call = MagicMock()  # would be AsyncMock if called
+    svc = TTSService(
+        hass=hass,
+        enabled=False,
+        configured_service=None,
+        configured_players=[],
+        volume=0.8,
+    )
+    await svc.async_announce(
+        threat_type="storm",
+        shelters_by_person={"person.alice": {"name": "Abri", "distance_m": 100, "eta_minutes": 1}},
+        is_drill=False,
+    )
+    hass.services.async_call.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_tts_service_no_resolved_service_is_noop(caplog) -> None:
+    hass = MagicMock()
+    hass.services.async_services.return_value = {"tts": {}}  # none registered
+    hass.services.async_call = MagicMock()
+    svc = TTSService(
+        hass=hass,
+        enabled=True,
+        configured_service=None,
+        configured_players=["media_player.kitchen"],
+        volume=0.8,
+    )
+    with caplog.at_level("WARNING"):
+        await svc.async_announce(
+            threat_type="storm",
+            shelters_by_person={"person.alice": {"name": "Abri", "distance_m": 100, "eta_minutes": 1}},
+            is_drill=False,
+        )
+    hass.services.async_call.assert_not_called()
+    assert any("No TTS service available" in r.message for r in caplog.records)
