@@ -49,3 +49,28 @@ def test_step_init_renders_sources_and_radius_fields() -> None:
         CONF_PROVIDER_ALERT_RADIUS_KM,
     ):
         assert expected in schema_keys, f"missing field {expected}"
+
+
+def test_step_init_submit_advances_to_routing() -> None:
+    flow = _make_flow()
+    # Prime the flow so _current() works (it does not need the first form render,
+    # but we call it to mirror real HA behaviour).
+    _run(flow.async_step_init())
+
+    result = _run(flow.async_step_init(user_input={
+        CONF_SEARCH_RADIUS: 3000,
+        CONF_ADAPTIVE_RADIUS: True,
+        CONF_CACHE_TTL: 12,
+        CONF_PROVIDER_GEORISQUES: True,
+        CONF_PROVIDER_METEO_FRANCE: False,
+        CONF_PROVIDER_POLL_INTERVAL: 90,
+        CONF_PROVIDER_MIN_SEVERITY: "moderate",
+        CONF_PROVIDER_AUTO_CANCEL: True,
+        CONF_PROVIDER_ALERT_RADIUS_KM: 20,
+    }))
+
+    assert result["type"] == "form"
+    assert result["step_id"] == "routing"
+    # Submitted values must be persisted on the flow for the final create_entry.
+    assert flow._options[CONF_PROVIDER_GEORISQUES] is True
+    assert flow._options[CONF_PROVIDER_POLL_INTERVAL] == 90
