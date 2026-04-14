@@ -24,6 +24,7 @@ def calculate_eta_minutes(distance_m: float, travel_mode: str) -> float:
     return round(distance_m / speed_ms / 60, 1)
 
 
+from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Any
 
@@ -76,3 +77,34 @@ class RoutingService:
         mode_key = "driving" if self.transport_mode == "driving" else "walking"
         speed = TRAVEL_SPEEDS.get(mode_key, TRAVEL_SPEEDS["walking"])
         return RouteResult(distance_m=distance, eta_seconds=distance / speed, source="haversine")
+
+    # --- cache internals ---
+
+    def _cache(self) -> "OrderedDict[tuple, tuple[float, RouteResult]]":
+        if not hasattr(self, "_cache_store"):
+            from collections import OrderedDict
+            self._cache_store: OrderedDict[tuple, tuple[float, RouteResult]] = OrderedDict()
+        return self._cache_store
+
+    @staticmethod
+    def _cache_key(lat1: float, lon1: float, lat2: float, lon2: float) -> tuple:
+        return (round(lat1, 4), round(lon1, 4), round(lat2, 4), round(lon2, 4))
+
+    def _cache_get(self, key: tuple, now: float) -> RouteResult | None:
+        cache = self._cache()
+        entry = cache.get(key)
+        if entry is None:
+            return None
+        inserted_at, result = entry
+        if now - inserted_at > self.cache_ttl_s:
+            cache.pop(key, None)
+            return None
+        cache.move_to_end(key)
+        return result
+
+    def _cache_put(self, key: tuple, result: RouteResult, now: float) -> None:
+        cache = self._cache()
+        cache[key] = (now, result)
+        cache.move_to_end(key)
+        while len(cache) > self.cache_max:
+            cache.popitem(last=False)
