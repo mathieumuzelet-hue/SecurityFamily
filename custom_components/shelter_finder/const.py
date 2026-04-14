@@ -151,7 +151,6 @@ CONF_TTS_VOLUME = "tts_volume"
 DEFAULT_TTS_ENABLED = False
 DEFAULT_TTS_SERVICE = "auto"
 DEFAULT_TTS_MEDIA_PLAYERS: list[str] = []
-DEFAULT_TTS_VOLUME = 80  # percent
 
 # French labels for threat types (used by TTS messages)
 THREAT_TYPE_LABELS_FR: dict[str, str] = {
@@ -168,3 +167,27 @@ THREAT_TYPE_LABELS_FR: dict[str, str] = {
 # ---------------------------------------------------------------------------
 CONF_DRILL = "drill"
 DEFAULT_DRILL = False
+
+# --- TTS (v0.6) ---
+
+# French labels for threat types (used in voice announcements; ASCII-only to
+# maximize TTS engine compatibility — no accents).
+THREAT_LABELS_FR: dict[str, str] = {
+    "storm": "tempete",
+    "earthquake": "seisme",
+    "attack": "attaque",
+    "armed_conflict": "conflit arme",
+    "flood": "inondation",
+    "nuclear_chemical": "nucleaire chimique",
+}
+
+# TTS defaults
+DEFAULT_TTS_VOLUME = 0.8  # 0.0-1.0, applied to media_player before speaking
+DEFAULT_TTS_BUFFER_SECONDS = 2  # extra seconds after estimated duration
+
+# Auto-detection order: first match wins (service name only, domain is "tts").
+TTS_SERVICE_CANDIDATES: list[str] = [
+    "google_translate_say",
+    "cloud_say",
+    "speak",
+]

@@ -32,6 +32,10 @@ from .const import (
     CONF_RE_NOTIFICATION_INTERVAL,
     CONF_SEARCH_RADIUS,
     CONF_OSRM_TRANSPORT_MODE,
+    CONF_TTS_ENABLED,
+    CONF_TTS_MEDIA_PLAYERS,
+    CONF_TTS_SERVICE,
+    CONF_TTS_VOLUME,
     CONF_WEBHOOK_ID,
     DEFAULT_ADAPTIVE_RADIUS_MAX,
     DEFAULT_CACHE_TTL,
@@ -43,6 +47,7 @@ from .const import (
     DEFAULT_RE_NOTIFICATION_INTERVAL,
     DEFAULT_OSRM_TRANSPORT_MODE,
     DEFAULT_TRAVEL_MODE,
+    DEFAULT_TTS_VOLUME,
     DOMAIN,
     SHELTER_TYPES,
     THREAT_TYPES,
@@ -50,6 +55,7 @@ from .const import (
 from .coordinator import ShelterUpdateCoordinator
 from .overpass import OverpassClient
 from .routing import RoutingService
+from .tts_service import TTSService, build_shelters_by_person
 from .webhook import async_handle_webhook
 
 _LOGGER = logging.getLogger(__name__)
@@ -140,13 +146,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         routing_service=routing_service,
     )
 
+    tts_service = TTSService(
+        hass=hass,
+        enabled=config.get(CONF_TTS_ENABLED, False),
+        configured_service=config.get(CONF_TTS_SERVICE) or None,
+        configured_players=config.get(CONF_TTS_MEDIA_PLAYERS, []) or [],
+        volume=config.get(CONF_TTS_VOLUME, DEFAULT_TTS_VOLUME),
+    )
+
     hass.data[DOMAIN][entry.entry_id] = {
         "coordinator": coordinator,
         "alert_coordinator": alert_coordinator,
         "cache": cache,
         "routing_service": routing_service,
+        "tts_service": tts_service,
     }
     hass.data[DOMAIN]["alert_coordinator"] = alert_coordinator
+    hass.data[DOMAIN]["tts_service"] = tts_service
 
     if not hass.services.has_service(DOMAIN, "trigger_alert"):
         _register_services(hass)
@@ -189,8 +205,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id, None)
-        if not any(k for k in hass.data[DOMAIN] if k != "alert_coordinator"):
+        reserved = {"alert_coordinator", "tts_service", "_frontend_registered"}
+        if not any(k for k in hass.data[DOMAIN] if k not in reserved):
             hass.data[DOMAIN].pop("alert_coordinator", None)
+            hass.data[DOMAIN].pop("tts_service", None)
 
     return unload_ok
 
@@ -355,3 +373,17 @@ async def _send_alert_notifications(hass: HomeAssistant, alert_coordinator: Aler
             alert_coordinator.record_notification(person_id)
         except Exception:
             _LOGGER.exception("Failed to send notification to %s", person_id)
+
+    # v0.6: Voice announcement on speakers (after push notifications)
+    tts_service = hass.data.get(DOMAIN, {}).get("tts_service")
+    if tts_service is not None:
+        try:
+            is_drill = getattr(alert_coordinator, "is_drill", False)
+            shelters_by_person = build_shelters_by_person(alert_coordinator)
+            await tts_service.async_announce(
+                threat_type=alert_coordinator.threat_type,
+                shelters_by_person=shelters_by_person,
+                is_drill=is_drill,
+            )
+        except Exception:
+            _LOGGER.exception("TTS announcement failed")
