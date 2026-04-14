@@ -135,10 +135,12 @@ async def test_fetch_queries_each_person_location(mock_cache, mock_overpass_clie
         "person.bob": _state(43.60, 1.44),
     })
     # Enough results per-person to skip adaptive widening.
+    # Spread coordinates so the haversine dedupe in merge_shelters_and_pois
+    # (50m threshold) does not collapse them.
     mock_overpass_client.fetch_shelters = AsyncMock(side_effect=[
-        [{"id": f"node/a{i}", "latitude": 48.85, "longitude": 2.35,
+        [{"id": f"node/a{i}", "latitude": 48.85 + i * 0.01, "longitude": 2.35,
           "shelter_type": "shelter", "source": "osm"} for i in range(3)],
-        [{"id": f"node/b{i}", "latitude": 43.60, "longitude": 1.44,
+        [{"id": f"node/b{i}", "latitude": 43.60 + i * 0.01, "longitude": 1.44,
           "shelter_type": "shelter", "source": "osm"} for i in range(3)],
     ])
     coord = _make_coordinator(
