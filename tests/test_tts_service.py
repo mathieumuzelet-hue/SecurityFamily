@@ -453,3 +453,26 @@ async def test_tts_service_missing_volume_level_skips_restore(monkeypatch) -> No
     ]
     assert len(vol_set_calls) == 1
     assert vol_set_calls[0].args[2]["volume_level"] == 0.8
+
+
+from custom_components.shelter_finder.tts_service import build_shelters_by_person
+
+
+def test_build_shelters_by_person_skips_none() -> None:
+    ac = MagicMock()
+    ac.persons = ["person.alice", "person.bob"]
+    ac.get_best_shelter = lambda p: (
+        {"name": "Abri", "distance_m": 200, "eta_minutes": 3}
+        if p == "person.alice" else None
+    )
+    result = build_shelters_by_person(ac)
+    assert result == {
+        "person.alice": {"name": "Abri", "distance_m": 200, "eta_minutes": 3},
+    }
+
+
+def test_build_shelters_by_person_empty_when_no_shelters() -> None:
+    ac = MagicMock()
+    ac.persons = ["person.alice"]
+    ac.get_best_shelter = lambda p: None
+    assert build_shelters_by_person(ac) == {}
