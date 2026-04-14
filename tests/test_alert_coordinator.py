@@ -168,3 +168,24 @@ def test_should_not_re_notify_safe_person(alert_coord: AlertCoordinator) -> None
     alert_coord.trigger("storm", triggered_by="manual")
     alert_coord.confirm_safe("person.alice")
     assert alert_coord.should_re_notify("person.alice") is False
+
+def test_trigger_default_is_not_drill(alert_coord: AlertCoordinator) -> None:
+    alert_coord.trigger("storm", triggered_by="manual")
+    assert alert_coord.is_drill is False
+
+def test_trigger_with_drill_true(alert_coord: AlertCoordinator) -> None:
+    alert_coord.trigger("storm", triggered_by="manual", drill=True)
+    assert alert_coord.is_active is True
+    assert alert_coord.is_drill is True
+    assert alert_coord.threat_type == "storm"
+
+def test_cancel_clears_drill_flag(alert_coord: AlertCoordinator) -> None:
+    alert_coord.trigger("storm", triggered_by="manual", drill=True)
+    alert_coord.cancel()
+    assert alert_coord.is_drill is False
+
+def test_retrigger_real_after_drill_resets_flag(alert_coord: AlertCoordinator) -> None:
+    alert_coord.trigger("storm", triggered_by="manual", drill=True)
+    alert_coord.cancel()
+    alert_coord.trigger("flood", triggered_by="manual")
+    assert alert_coord.is_drill is False

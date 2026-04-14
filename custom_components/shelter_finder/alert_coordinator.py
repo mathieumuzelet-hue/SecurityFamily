@@ -37,6 +37,7 @@ class AlertCoordinator:
         self._triggered_at: datetime | None = None
         self._persons_safe: list[str] = []
         self._notification_counts: dict[str, int] = {}
+        self._is_drill: bool = False
 
     @property
     def is_active(self) -> bool:
@@ -55,6 +56,10 @@ class AlertCoordinator:
         return self._triggered_at
 
     @property
+    def is_drill(self) -> bool:
+        return self._is_drill
+
+    @property
     def persons_safe(self) -> list[str]:
         return list(self._persons_safe)
 
@@ -64,7 +69,7 @@ class AlertCoordinator:
             return False
         return all(p in self._persons_safe for p in self.persons)
 
-    def trigger(self, threat_type: str, triggered_by: str = "manual") -> None:
+    def trigger(self, threat_type: str, triggered_by: str = "manual", drill: bool = False) -> None:
         if threat_type not in THREAT_TYPES:
             raise ValueError(f"Unknown threat type: {threat_type}")
         self._is_active = True
@@ -73,6 +78,7 @@ class AlertCoordinator:
         self._triggered_at = datetime.now(timezone.utc)
         self._persons_safe = []
         self._notification_counts = {p: 0 for p in self.persons}
+        self._is_drill = drill
 
     def cancel(self) -> None:
         self._is_active = False
@@ -81,6 +87,7 @@ class AlertCoordinator:
         self._triggered_at = None
         self._persons_safe = []
         self._notification_counts = {}
+        self._is_drill = False
 
     def confirm_safe(self, person_entity_id: str) -> None:
         if not self._is_active:
