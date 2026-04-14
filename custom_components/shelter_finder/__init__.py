@@ -470,16 +470,22 @@ async def _send_alert_notifications(hass: HomeAssistant, alert_coordinator: Aler
         except Exception:
             _LOGGER.exception("Failed to send notification to %s", person_id)
 
-    # v0.6: Voice announcement on speakers (after push notifications)
+    # v0.6: Voice announcement on speakers — fire-and-forget so push
+    # notifications are not serialized behind the TTS playback + volume
+    # restore cycle (which can take 10+ seconds on slow speakers).
     tts_service = hass.data.get(DOMAIN, {}).get("tts_service")
     if tts_service is not None:
-        try:
-            is_drill = getattr(alert_coordinator, "is_drill", False)
-            shelters_by_person = await build_shelters_by_person(alert_coordinator)
-            await tts_service.async_announce(
-                threat_type=alert_coordinator.threat_type,
-                shelters_by_person=shelters_by_person,
-                is_drill=is_drill,
-            )
-        except Exception:
-            _LOGGER.exception("TTS announcement failed")
+        is_drill = getattr(alert_coordinator, "is_drill", False)
+
+        async def _run_tts() -> None:
+            try:
+                shelters_by_person = await build_shelters_by_person(alert_coordinator)
+                await tts_service.async_announce(
+                    threat_type=alert_coordinator.threat_type,
+                    shelters_by_person=shelters_by_person,
+                    is_drill=is_drill,
+                )
+            except Exception:
+                _LOGGER.exception("TTS announcement failed")
+
+        hass.async_create_task(_run_tts())
