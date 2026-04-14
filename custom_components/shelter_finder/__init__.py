@@ -299,7 +299,7 @@ def _find_mobile_app_service(hass: HomeAssistant, person_name: str) -> str | Non
 async def _send_alert_notifications(hass: HomeAssistant, alert_coordinator: AlertCoordinator, message: str = "") -> None:
     """Send push notifications to all tracked persons."""
     for person_id in alert_coordinator.persons:
-        best = alert_coordinator.get_best_shelter(person_id)
+        best = await alert_coordinator.get_best_shelter(person_id)
         if best is None:
             continue
 
