@@ -98,3 +98,19 @@ def test_step_routing_renders_all_osrm_fields() -> None:
         CONF_OSRM_TRANSPORT_MODE,
     ):
         assert expected in schema_keys, f"missing field {expected}"
+
+
+def test_step_routing_submit_advances_to_notifications() -> None:
+    flow = _make_flow()
+    result = _run(flow.async_step_routing(user_input={
+        CONF_OSRM_ENABLED: True,
+        CONF_OSRM_MODE: "self_hosted",
+        CONF_OSRM_URL: "http://osrm.local:5000",
+        CONF_OSRM_TRANSPORT_MODE: "walking",
+    }))
+
+    assert result["type"] == "form"
+    assert result["step_id"] == "notifications"
+    assert flow._options[CONF_OSRM_ENABLED] is True
+    assert flow._options[CONF_OSRM_MODE] == "self_hosted"
+    assert flow._options[CONF_OSRM_URL] == "http://osrm.local:5000"
