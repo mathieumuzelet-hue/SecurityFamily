@@ -64,5 +64,10 @@ class ShelterDrillButton(ButtonEntity):
         self._alert_coordinator = alert_coordinator
 
     async def async_press(self) -> None:
+        # TODO: drill mode currently hardcodes the "storm" threat type for the
+        # practice scenario. A future iteration should expose one drill button
+        # per entry in THREAT_TYPES (or a service-data threat_type parameter)
+        # so users can rehearse earthquake / flood / nuclear_chemical plans
+        # too. Tracked as scope-expansion beyond v0.6.1.
         self._alert_coordinator.trigger("storm", triggered_by="button", drill=True)
         self._coordinator.async_set_updated_data(self._coordinator.data or [])

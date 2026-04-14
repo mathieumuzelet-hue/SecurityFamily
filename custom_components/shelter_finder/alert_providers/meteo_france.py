@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import logging
-import math
 from datetime import datetime, timezone
 from typing import Any
 
 import aiohttp
 
-from .base import AlertProvider, GouvAlert
+from .._geo import haversine_km
+from .base import AlertProvider, GouvAlert, parse_iso8601
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -72,22 +72,13 @@ _SNOW_KEYWORDS = {"neige-verglas", "neige", "verglas"}
 _HEAT_KEYWORDS = {"canicule"}
 
 
-def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    r = 6371.0
-    phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dl = math.radians(lon2 - lon1)
-    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dl / 2) ** 2
-    return 2 * r * math.asin(math.sqrt(a))
-
-
 def _nearby_department_codes(lat: float, lon: float, radius_km: float) -> set[str]:
     """Return department codes whose centroid is within radius_km + 80km buffer."""
     buffer = radius_km + 80.0
     return {
         code
         for code, (dlat, dlon) in DEPARTMENT_CENTROIDS.items()
-        if _haversine_km(lat, lon, dlat, dlon) <= buffer
+        if haversine_km(lat, lon, dlat, dlon) <= buffer
     }
 
 
@@ -126,18 +117,6 @@ def _map_phenomenon_to_threat(name: str | None) -> str | None:
     return None
 
 
-def _parse_iso8601(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    try:
-        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt
-
-
 class MeteoFranceProvider(AlertProvider):
     """Public Meteo France vigilance JSON feed."""
 
@@ -166,8 +145,8 @@ class MeteoFranceProvider(AlertProvider):
         alerts: list[GouvAlert] = []
         periods = payload.get("product", {}).get("periods", []) or []
         for period in periods:
-            starts = _parse_iso8601(period.get("begin_validity_time")) or datetime.now(timezone.utc)
-            expires = _parse_iso8601(period.get("end_validity_time"))
+            starts = parse_iso8601(period.get("begin_validity_time")) or datetime.now(timezone.utc)
+            expires = parse_iso8601(period.get("end_validity_time"))
             starts_iso = starts.isoformat()
             domain_ids = (period.get("timelaps") or {}).get("domain_ids", []) or []
             for dom in domain_ids:

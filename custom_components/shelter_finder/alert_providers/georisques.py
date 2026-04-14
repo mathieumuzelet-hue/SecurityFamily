@@ -8,7 +8,7 @@ from typing import Any
 
 import aiohttp
 
-from .base import AlertProvider, GouvAlert
+from .base import AlertProvider, GouvAlert, parse_iso8601
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -45,20 +45,6 @@ def _map_risque_to_threat(risque: str) -> str | None:
     if upper in {"INDUSTRIEL"} or "ICPE" in upper or "SEVESO" in upper:
         return "nuclear_chemical"
     return None
-
-
-def _parse_iso8601(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    # Normalize trailing Z to +00:00 for fromisoformat
-    normalized = value.replace("Z", "+00:00")
-    try:
-        dt = datetime.fromisoformat(normalized)
-    except ValueError:
-        return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt
 
 
 class GeorisquesProvider(AlertProvider):
@@ -98,8 +84,8 @@ class GeorisquesProvider(AlertProvider):
             raw_id = item.get("id_gaspar") or item.get("id")
             if not raw_id:
                 continue
-            starts = _parse_iso8601(item.get("date_debut")) or datetime.now(timezone.utc)
-            expires = _parse_iso8601(item.get("date_fin"))
+            starts = parse_iso8601(item.get("date_debut")) or datetime.now(timezone.utc)
+            expires = parse_iso8601(item.get("date_fin"))
             try:
                 zone_lat = float(item.get("latitude"))
                 zone_lon = float(item.get("longitude"))

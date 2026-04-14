@@ -4,28 +4,19 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import math
 from datetime import timedelta
 from typing import Any, Callable
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.event import async_track_time_interval
 
+from ._geo import haversine_km
 from .alert_coordinator import AlertCoordinator
 from .alert_providers.base import AlertProvider, GouvAlert, meets_min_severity
 
 _LOGGER = logging.getLogger(__name__)
 
 _PROVIDER_TRIGGER_PREFIX = "provider:"
-
-
-def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    r = 6371.0
-    phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dl = math.radians(lon2 - lon1)
-    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dl / 2) ** 2
-    return 2 * r * math.asin(math.sqrt(a))
 
 
 class AlertProviderManager:
@@ -129,7 +120,7 @@ class AlertProviderManager:
         for alert in collected:
             if not meets_min_severity(alert.severity, self._min_severity):
                 continue
-            dist = _haversine_km(home_lat, home_lon, alert.zone_lat, alert.zone_lon)
+            dist = haversine_km(home_lat, home_lon, alert.zone_lat, alert.zone_lon)
             if dist > self._radius_km:
                 continue
             qualifying.append(alert)
