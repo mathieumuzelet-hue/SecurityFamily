@@ -22,3 +22,36 @@ def calculate_eta_minutes(distance_m: float, travel_mode: str) -> float:
         return 0.0
     speed_ms = TRAVEL_SPEEDS.get(travel_mode, TRAVEL_SPEEDS["walking"])
     return round(distance_m / speed_ms / 60, 1)
+
+
+from dataclasses import dataclass
+from typing import Any
+
+
+@dataclass
+class RouteResult:
+    distance_m: float
+    eta_seconds: float
+    source: str  # "osrm" or "haversine"
+
+
+class RoutingService:
+    """Wraps OSRM API with LRU+TTL cache and haversine fallback."""
+
+    def __init__(
+        self,
+        session: Any,
+        enabled: bool = False,
+        url: str = "https://router.project-osrm.org",
+        transport_mode: str = "foot",
+        timeout_s: float = 5.0,
+        cache_ttl_s: float = 300.0,
+        cache_max: int = 500,
+    ) -> None:
+        self.session = session
+        self.enabled = enabled
+        self.url = url.rstrip("/")
+        self.transport_mode = transport_mode
+        self.timeout_s = timeout_s
+        self.cache_ttl_s = cache_ttl_s
+        self.cache_max = cache_max
