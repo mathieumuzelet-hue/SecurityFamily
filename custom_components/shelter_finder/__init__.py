@@ -331,17 +331,22 @@ async def _send_alert_notifications(hass: HomeAssistant, alert_coordinator: Aler
             )
             continue
 
+        is_drill = bool(getattr(alert_coordinator, "is_drill", False))
+        title_prefix = "[EXERCICE] " if is_drill else ""
+        push_priority = "normal" if is_drill else "high"
+        title = f"{title_prefix}Shelter Finder - {alert_coordinator.threat_type}"
+
         try:
             await hass.services.async_call(
                 "notify", device_service,
                 {
                     "message": notif_message,
-                    "title": f"Shelter Finder - {alert_coordinator.threat_type}",
+                    "title": title,
                     "data": {
                         "actions": [{"action": "CONFIRM_SAFE", "title": "Je suis à l'abri"}],
                         "url": nav_url,
                         "clickAction": nav_url,
-                        "priority": "high",
+                        "priority": push_priority,
                         "ttl": 0,
                     },
                 },

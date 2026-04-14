@@ -79,3 +79,62 @@ def test_trigger_alert_schema_rejects_non_boolean_drill(mock_hass_with_ac):
     _, schema = mock_hass_with_ac._registered["trigger_alert"]
     with pytest.raises(vol.Invalid):
         schema({"threat_type": "storm", "drill": "maybe"})
+
+
+@pytest.mark.asyncio
+async def test_real_alert_notification_title_and_priority():
+    hass = MagicMock()
+    hass.services = MagicMock()
+    hass.services.has_service = MagicMock(return_value=True)
+    hass.services.async_call = AsyncMock()
+    hass.services.async_services = MagicMock(
+        return_value={"notify": {"mobile_app_alice": None}}
+    )
+
+    ac = MagicMock()
+    ac.persons = ["person.alice"]
+    ac.threat_type = "storm"
+    ac.is_drill = False
+    ac.get_best_shelter = AsyncMock(return_value={
+        "name": "Abri A", "shelter_type": "bunker",
+        "latitude": 48.85, "longitude": 2.35,
+        "distance_m": 120, "eta_minutes": 2,
+    })
+    ac.record_notification = MagicMock()
+
+    await _send_alert_notifications(hass, ac, "")
+
+    args, kwargs = hass.services.async_call.call_args
+    assert args[0] == "notify"
+    payload = args[2]
+    assert payload["title"] == "Shelter Finder - storm"
+    assert payload["data"]["priority"] == "high"
+
+
+@pytest.mark.asyncio
+async def test_drill_alert_notification_title_and_priority():
+    hass = MagicMock()
+    hass.services = MagicMock()
+    hass.services.has_service = MagicMock(return_value=True)
+    hass.services.async_call = AsyncMock()
+    hass.services.async_services = MagicMock(
+        return_value={"notify": {"mobile_app_alice": None}}
+    )
+
+    ac = MagicMock()
+    ac.persons = ["person.alice"]
+    ac.threat_type = "storm"
+    ac.is_drill = True
+    ac.get_best_shelter = AsyncMock(return_value={
+        "name": "Abri A", "shelter_type": "bunker",
+        "latitude": 48.85, "longitude": 2.35,
+        "distance_m": 120, "eta_minutes": 2,
+    })
+    ac.record_notification = MagicMock()
+
+    await _send_alert_notifications(hass, ac, "")
+
+    args, kwargs = hass.services.async_call.call_args
+    payload = args[2]
+    assert payload["title"] == "[EXERCICE] Shelter Finder - storm"
+    assert payload["data"]["priority"] == "normal"
