@@ -30,6 +30,16 @@ Alerts can be fired manually, via an external webhook, or automatically by the F
 
 ## Version highlights
 
+### [v0.6.4](https://github.com/mathieumuzelet-hue/SecurityFamily/releases/tag/v0.6.4) — 2026-04-14
+
+- **Nouveau type d'abri : `police`** (OSM `amenity=police`). Scoring élevé en **attaque (9/10)** — personnel armé, bâtiment solide, communications. Score modéré en conflit armé (6/10, cible potentielle). Standard ailleurs.
+- _New `police` shelter type, high attack priority._
+
+### [v0.6.3](https://github.com/mathieumuzelet-hue/SecurityFamily/releases/tag/v0.6.3) — 2026-04-14
+
+- **Fix safety-critical : cut-off distance par personne avant ranking.** Un métro à 22 km ne pouvait plus battre une mairie à 500 m sous prétexte d'un meilleur type. Filtre strict à `search_radius × 1.5`, élargi à `× 3` si < 3 candidats.
+- _Safety-critical scoring fix: strict per-person distance cutoff prevents recommending distant shelters when closer alternatives exist._
+
 ### [v0.6.2](https://github.com/mathieumuzelet-hue/SecurityFamily/releases/tag/v0.6.2) — 2026-04-14
 
 - **Refresh par personne** — les abris sont désormais recherchés autour de la position actuelle de **chaque** personne, pas uniquement autour de `zone.home`. Avec 2 personnes éloignées, 2 zones sont couvertes. Fallback à `zone.home` si aucune personne n'a de position.
@@ -178,16 +188,34 @@ L'ID webhook s'affiche dans les Options de l'intégration.
 
 ---
 
-## Types de menaces
+## Types de menaces et scoring
 
-| Type | Clé | Abris prioritaires |
-|---|---|---|
-| Tempête | `storm` | Métro, bunkers, bâtiments publics |
-| Séisme | `earthquake` | Espaces ouverts, centres sportifs |
-| Attaque | `attack` | Bunkers, métro, mairies |
-| Conflit armé | `armed_conflict` | Bunkers, métro |
-| Inondation | `flood` | Mairies, écoles, points hauts |
-| Nucléaire/Chimique | `nuclear_chemical` | Bunkers, sous-sols étanches |
+Le choix du meilleur abri combine **type de menace × type d'abri × distance**. La matrice ci-dessous donne le score de base (0 = inutile/dangereux, 10 = idéal). Le score final ajoute un bonus de proximité.
+
+| Type abri | 🌪️ Tempête | 🌍 Séisme | 🎯 Attaque | ⚔️ Conflit armé | 🌊 Inondation | ☢️ Nucléaire/Chimique |
+|---|---|---|---|---|---|---|
+| **subway** (métro) | **10** | 2 | 9 | **10** | 1 | 8 |
+| **bunker** | 9 | 2 | **10** | **10** | 1 | **10** |
+| **civic** (mairie) | 8 | 3 | 7 | 6 | **8** | 4 |
+| **school** (école) | 7 | 4 | 5 | 5 | 7 | 3 |
+| **worship** (lieu de culte) | 6 | 3 | 6 | 4 | 6 | 2 |
+| **shelter** (abri générique OSM) | 5 | 5 | 3 | 3 | 4 | 1 |
+| **sports** (gymnase) | 4 | 7 | 2 | 2 | 5 | 1 |
+| **hospital** | 3 | 4 | 4 | 4 | 7 | 3 |
+| **government** (bât. officiel) | 3 | 3 | 6 | 5 | 7 | 4 |
+| **police** (commissariat) _v0.6.4_ | 5 | 3 | **9** | 6 | 5 | 3 |
+| **open_space** (terrain ouvert) | 1 | **10** | 1 | 1 | 3 | 0 |
+
+**Logique** : tempête → souterrains/enfermés · séisme → **inversé** (fuir les structures, préférer l'ouvert) · attaque/conflit → bunker/métro/police · inondation → bâtiments en hauteur · NRBC → étanchéité (bunker).
+
+**Formule finale (v0.6.3+)** :
+```
+1. Filtrer par personne : shelters à ≤ search_radius × 1.5 (élargi à × 3 si < 3 candidats)
+2. score = table[menace][type] × 10 + max(0, 10 × (1 - distance_m / 15000))
+3. Le plus haut score gagne
+```
+
+**Surcharger** : créer `shelter_finder_scores.yaml` dans `/config` avec ta propre matrice.
 
 ---
 
@@ -334,12 +362,6 @@ automation:
             Attention, une alerte {{ states('sensor.alert_type') }} est active.
             Rejoins {{ states('sensor.mathieu_shelter_nearest') }} au plus vite.
 ```
-
----
-
-## Scoring personnalisé
-
-Surcharger le scoring par défaut menace/abri en créant `shelter_finder_scores.yaml` dans le répertoire de config HA.
 
 ---
 
