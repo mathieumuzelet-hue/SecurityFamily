@@ -51,6 +51,7 @@ class ShelterAlertBinarySensor(CoordinatorEntity, BinarySensorEntity):
             "triggered_at": str(ac.triggered_at) if ac.triggered_at else None,
             "triggered_by": ac.triggered_by,
             "persons_safe": ac.persons_safe,
+            "drill": bool(ac.is_drill),
             "shelters": shelter_list,
             "shelter_count": len(shelter_list),
         }

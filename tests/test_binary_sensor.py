@@ -17,6 +17,7 @@ def mock_alert_coordinator():
     alert.triggered_at = None
     alert.triggered_by = None
     alert.persons_safe = []
+    alert.is_drill = False
     return alert
 
 def test_binary_sensor_off(mock_coordinator, mock_alert_coordinator):
@@ -40,3 +41,16 @@ def test_binary_sensor_attributes(mock_coordinator, mock_alert_coordinator):
     assert attrs["threat_type"] == "attack"
     assert attrs["triggered_by"] == "manual"
     assert attrs["persons_safe"] == ["person.alice"]
+
+
+def test_binary_sensor_drill_attribute_false(mock_coordinator, mock_alert_coordinator):
+    sensor = ShelterAlertBinarySensor(mock_coordinator, mock_alert_coordinator)
+    attrs = sensor.extra_state_attributes
+    assert attrs["drill"] is False
+
+
+def test_binary_sensor_drill_attribute_true(mock_coordinator, mock_alert_coordinator):
+    mock_alert_coordinator.is_drill = True
+    sensor = ShelterAlertBinarySensor(mock_coordinator, mock_alert_coordinator)
+    attrs = sensor.extra_state_attributes
+    assert attrs["drill"] is True
