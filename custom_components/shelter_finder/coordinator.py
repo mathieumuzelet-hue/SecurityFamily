@@ -57,28 +57,89 @@ class ShelterUpdateCoordinator(DataUpdateCoordinator[list[dict[str, Any]]]):
         except Exception as err:
             raise UpdateFailed(f"Failed to update shelter data: {err}") from err
 
-    async def _fetch_from_overpass(self) -> list[dict[str, Any]]:
-        """Fetch shelters from Overpass with adaptive radius and fallback."""
-        home = self.hass.states.get("zone.home")
-        if home is None:
-            raise UpdateFailed("zone.home not found")
+    def _collect_person_positions(self) -> list[tuple[str, float, float]]:
+        """Return (person_id, lat, lon) for each person that has a known location."""
+        positions: list[tuple[str, float, float]] = []
+        for person_id in self.persons:
+            state = self.hass.states.get(person_id)
+            if state is None:
+                _LOGGER.debug("Person %s has no state, skipping", person_id)
+                continue
+            lat = state.attributes.get("latitude")
+            lon = state.attributes.get("longitude")
+            if lat is None or lon is None:
+                _LOGGER.debug("Person %s has no location, skipping", person_id)
+                continue
+            positions.append((person_id, float(lat), float(lon)))
+        return positions
 
-        lat = home.attributes.get("latitude", 0)
-        lon = home.attributes.get("longitude", 0)
+    async def _fetch_around(
+        self, lat: float, lon: float,
+    ) -> list[dict[str, Any]]:
+        """Run an Overpass query at (lat, lon) with adaptive widening."""
+        shelters = await self.overpass_client.fetch_shelters(lat, lon, self.search_radius)
+
+        if self.adaptive_radius:
+            radii = compute_adaptive_radii(
+                self.search_radius, self.adaptive_radius_max, len(shelters),
+            )
+            for radius in radii:
+                extra = await self.overpass_client.fetch_shelters(lat, lon, radius)
+                shelters.extend(extra)
+                if len(shelters) >= 3:
+                    break
+
+        return shelters
+
+    @staticmethod
+    def _dedup_key(shelter: dict[str, Any]) -> Any:
+        """Stable key to dedupe shelters across per-person queries."""
+        osm_id = shelter.get("id") or shelter.get("osm_id")
+        if osm_id:
+            return ("id", osm_id)
+        lat = shelter.get("latitude")
+        lon = shelter.get("longitude")
+        return ("coord", round(float(lat), 5), round(float(lon), 5))
+
+    async def _fetch_from_overpass(self) -> list[dict[str, Any]]:
+        """Fetch shelters around each person's current location with adaptive radius.
+
+        Runs one Overpass query per person that has a known position, merges
+        and deduplicates results. Falls back to ``zone.home`` only if no
+        person has a location. On Overpass failure, returns the stale cache
+        once (not per-person).
+        """
+        positions = self._collect_person_positions()
+
+        if not positions:
+            home = self.hass.states.get("zone.home")
+            if home is None:
+                raise UpdateFailed(
+                    "No person has a known location and zone.home is missing",
+                )
+            home_lat = home.attributes.get("latitude")
+            home_lon = home.attributes.get("longitude")
+            if home_lat is None or home_lon is None:
+                raise UpdateFailed(
+                    "No person has a known location and zone.home has no coordinates",
+                )
+            _LOGGER.debug(
+                "No person location available, falling back to zone.home",
+            )
+            positions = [("zone.home", float(home_lat), float(home_lon))]
 
         try:
-            shelters = await self.overpass_client.fetch_shelters(lat, lon, self.search_radius)
-
-            if self.adaptive_radius:
-                radii = compute_adaptive_radii(
-                    self.search_radius, self.adaptive_radius_max, len(shelters),
+            merged: dict[Any, dict[str, Any]] = {}
+            for person_id, lat, lon in positions:
+                per_person = await self._fetch_around(lat, lon)
+                _LOGGER.debug(
+                    "Overpass returned %d shelters around %s",
+                    len(per_person), person_id,
                 )
-                for radius in radii:
-                    extra = await self.overpass_client.fetch_shelters(lat, lon, radius)
-                    shelters.extend(extra)
-                    if len(shelters) >= 3:
-                        break
+                for shelter in per_person:
+                    merged.setdefault(self._dedup_key(shelter), shelter)
 
+            shelters = list(merged.values())
             await self.hass.async_add_executor_job(self.cache.save, shelters)
             return shelters
 
