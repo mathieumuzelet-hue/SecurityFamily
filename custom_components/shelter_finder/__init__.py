@@ -209,9 +209,10 @@ def _register_services(hass: HomeAssistant) -> None:
     async def handle_trigger_alert(call: ServiceCall) -> None:
         threat_type = call.data["threat_type"]
         message = call.data.get("message", "")
+        drill = call.data.get("drill", False)
         ac = hass.data.get(DOMAIN, {}).get("alert_coordinator")
         if ac:
-            ac.trigger(threat_type, triggered_by="service")
+            ac.trigger(threat_type, triggered_by="service", drill=drill)
             _notify_coordinators(hass)
             await _send_alert_notifications(hass, ac, message)
 
@@ -262,6 +263,7 @@ def _register_services(hass: HomeAssistant) -> None:
         schema=vol.Schema({
             vol.Required("threat_type"): vol.In(THREAT_TYPES),
             vol.Optional("message", default=""): cv.string,
+            vol.Optional("drill", default=False): cv.boolean,
         }),
     )
     hass.services.async_register(DOMAIN, "cancel_alert", handle_cancel_alert)
