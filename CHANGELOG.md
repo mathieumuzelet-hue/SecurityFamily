@@ -22,6 +22,9 @@ Major feature release: real routing, drill mode, voice announcements, and French
 
 ### Fixed
 - Consolidated duplicate `THREAT_LABELS_FR` / `THREAT_TYPE_LABELS_FR` constants, corrected `CONF_TTS_VOLUME` voluptuous validator (float 0.0–1.0), and made `build_shelters_by_person` properly async. (#12)
+- `AlertCoordinator.get_best_shelter()` no longer mutates the shared shelter dicts cached in `ShelterUpdateCoordinator.data`; enrichment (`eta_minutes`, `route_source`, `distance_m`) is written to a shallow copy so state from one alert (e.g. a drill) can't leak into the next.
+- Georisques FR severity labels (`faible` / `moyen` / `fort` / `tres_fort`, plus numeric `1`–`4`) are now translated to the English keys that `SEVERITY_RANK` / `meets_min_severity` understand. Without this, every Georisques alert was silently filtered out at the default `min_severity="severe"`.
+- `CONF_OSRM_MODE` (the `public` vs `self_hosted` selector in Options → Routage) is now read at setup and compared against the configured URL; a `_LOGGER.warning` is emitted when the mode and URL disagree. Does not block startup.
 
 ## [0.5.0] — 2026-04-13
 
