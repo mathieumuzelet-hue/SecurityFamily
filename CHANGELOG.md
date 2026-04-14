@@ -2,6 +2,55 @@
 
 All notable changes to Shelter Finder are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.1] — 2026-04-14
+
+Post-release polish sweep closing the v0.6 code-review findings. No user-facing
+config changes; existing installs upgrade in place.
+
+### Changed
+- TTS voice announcements now pick the closest person (minimum `distance_m`)
+  instead of relying on arbitrary dict-iteration order, matching the spec.
+  (#17)
+- `_send_alert_notifications` schedules the TTS flow via
+  `hass.async_create_task`, so push notifications are no longer serialized
+  behind TTS playback + volume restore (which can take 10+ seconds on slow
+  speakers). (#17)
+- Meteo France provider now maps `neige-verglas` (snow/ice) and `canicule`
+  (heatwave) vigilance bulletins to the `storm` threat type, so those
+  advisories actually trigger alerts. (#18)
+- Options flow now validates `provider_alert_radius_km` as a float
+  (`vol.Coerce(float)`), accepting fractional radii instead of int-only. (#19)
+
+### Fixed
+- `AlertProviderManager.async_stop` no longer silently swallows
+  non-`CancelledError` exceptions during shutdown — they are logged at
+  debug level with `exc_info` so real shutdown failures are surfaced. (#20)
+
+### Internal
+- `const.py` consolidated: merged the legacy OSRM block with the v0.6 block,
+  dropped plan-aligned aliases (`CONF_POLLING_INTERVAL`, `CONF_ALERT_RADIUS`,
+  `CONF_AUTO_CANCEL`, `CONF_MIN_SEVERITY` and their `DEFAULT_*`/`MIN_*`/`MAX_*`
+  siblings), dropped the `THREAT_TYPE_LABELS_FR` alias, and documented that
+  `attack` / `armed_conflict` are deliberately not mapped by any FR-Alert
+  provider. Call sites in `__init__.py` and tests use the canonical
+  `CONF_PROVIDER_*` / `PROVIDER_POLL_INTERVAL_*` names. (#15)
+- Dropped the `hass.data[DOMAIN]["alert_coordinator"]` and
+  `["tts_service"]` globals — they would have collided with a second
+  config entry. Per-entry storage under `hass.data[DOMAIN][entry.entry_id]`
+  is the only location; service handlers and the webhook iterate entries.
+  `_send_alert_notifications` takes an explicit `tts_service` kwarg from
+  its caller. Single-entry behavior is unchanged. (#16)
+- DRY helpers: extracted `haversine_km` to a shared `_geo` module (replaces
+  duplicated implementations in `alert_provider_manager` and
+  `alert_providers/meteo_france`); moved `parse_iso8601` to
+  `alert_providers/base`. Cleaned up duplicate `OrderedDict` / `asyncio`
+  / `TRAVEL_SPEEDS` imports inside `routing.py`. Added a TODO on
+  `ShelterDrillButton` documenting the `"storm"` hardcode. Test coverage
+  expanded: regression test now calls `get_best_shelter` twice to guard
+  against repeat-enrichment leaks, and the `_FakeCoordinator.trigger` in
+  `test_alert_provider_manager` mirrors the real signature's `drill=False`
+  kwarg. (#21)
+
 ## [0.6.0] — 2026-04-14
 
 Major feature release: real routing, drill mode, voice announcements, and French government alert integration.

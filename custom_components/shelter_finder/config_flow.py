@@ -206,7 +206,7 @@ class ShelterFinderOptionsFlow(OptionsFlow):
             vol.Required(
                 CONF_PROVIDER_ALERT_RADIUS_KM,
                 default=cur.get(CONF_PROVIDER_ALERT_RADIUS_KM, DEFAULT_PROVIDER_ALERT_RADIUS_KM),
-            ): vol.All(int, vol.Range(min=1, max=200)),
+            ): vol.All(vol.Coerce(float), vol.Range(min=1.0, max=200.0)),
         })
 
         return self.async_show_form(step_id="init", data_schema=schema)

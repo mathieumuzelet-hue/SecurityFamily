@@ -239,3 +239,13 @@ async def test_get_best_shelter_does_not_mutate_cached_shelter_dicts() -> None:
     # But the original cached shelter dict must NOT have been mutated.
     assert "eta_minutes" not in original_shelters[0]
     assert "route_source" not in original_shelters[0]
+
+    # Call a second time (e.g. re-notification path) — the cached shelter
+    # must still be untouched. This guards the B1 fix against a regression
+    # where repeated enrichment could leak into the shared dict.
+    best2 = await ac.get_best_shelter("person.alice")
+    assert best2 is not None
+    assert "eta_minutes" in best2
+    assert "eta_minutes" not in original_shelters[0]
+    assert "route_source" not in original_shelters[0]
+    assert "distance_m" not in original_shelters[0]

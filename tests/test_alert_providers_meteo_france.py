@@ -70,7 +70,11 @@ def test_map_phenomenon_to_threat():
     assert _map_phenomenon_to_threat("Vent violent") == "storm"
     assert _map_phenomenon_to_threat("orages") == "storm"
     assert _map_phenomenon_to_threat("pluie-inondation") == "flood"
-    assert _map_phenomenon_to_threat("neige") is None  # not in v0.6 scope
+    # v0.6.1: snow/ice and heatwave now map to storm (closest response pattern).
+    assert _map_phenomenon_to_threat("neige") == "storm"
+    assert _map_phenomenon_to_threat("neige-verglas") == "storm"
+    assert _map_phenomenon_to_threat("canicule") == "storm"
+    assert _map_phenomenon_to_threat("phenomene inconnu") is None
 
 
 def test_nearby_departments_paris():

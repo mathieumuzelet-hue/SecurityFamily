@@ -44,10 +44,13 @@ class _FakeCoordinator:
     def triggered_by(self) -> str | None:
         return self._by
 
-    def trigger(self, threat_type: str, triggered_by: str = "manual") -> None:
+    def trigger(
+        self, threat_type: str, triggered_by: str = "manual", drill: bool = False,
+    ) -> None:
         self._active = True
         self._threat = threat_type
         self._by = triggered_by
+        self._drill = drill
         self.trigger_calls.append((threat_type, triggered_by))
 
     def cancel(self) -> None:

@@ -32,7 +32,17 @@ def mock_hass_with_ac():
     ac.threat_type = "storm"
     ac.persons = ["person.alice"]
 
-    hass.data = {DOMAIN: {"alert_coordinator": ac}}
+    # Per-entry layout: the service handler iterates hass.data[DOMAIN]
+    # values looking for dicts with a "coordinator" key.
+    hass.data = {
+        DOMAIN: {
+            "entry_1": {
+                "coordinator": MagicMock(),
+                "alert_coordinator": ac,
+                "tts_service": None,
+            }
+        }
+    }
     hass._registered = registered
     hass._ac = ac
     return hass

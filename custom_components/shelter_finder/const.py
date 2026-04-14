@@ -4,7 +4,9 @@ from __future__ import annotations
 
 DOMAIN = "shelter_finder"
 
-# Config keys
+# ---------------------------------------------------------------------------
+# Core config keys
+# ---------------------------------------------------------------------------
 CONF_PERSONS = "persons"
 CONF_SEARCH_RADIUS = "search_radius"
 CONF_LANGUAGE = "language"
@@ -12,8 +14,6 @@ CONF_ENABLED_THREATS = "enabled_threats"
 CONF_DEFAULT_TRAVEL_MODE = "default_travel_mode"
 CONF_OVERPASS_URL = "overpass_url"
 CONF_CACHE_TTL = "cache_ttl"
-CONF_OSRM_ENABLED = "osrm_enabled"
-CONF_OSRM_URL = "osrm_url"
 CONF_CUSTOM_OSM_TAGS = "custom_osm_tags"
 CONF_WEBHOOK_ID = "webhook_id"
 CONF_RE_NOTIFICATION_INTERVAL = "re_notification_interval"
@@ -32,7 +32,10 @@ DEFAULT_MAX_RE_NOTIFICATIONS = 3
 DEFAULT_ADAPTIVE_RADIUS_MAX = 15000  # meters
 ADAPTIVE_RADIUS_MIN_RESULTS = 3
 
-# Threat types
+# Threat types.
+# Note: "attack" and "armed_conflict" are deliberately not mapped by any
+# FR-Alert provider — no public government source currently exposes those
+# categories. They remain available for manual / webhook / button triggers.
 THREAT_TYPES = [
     "storm",
     "earthquake",
@@ -127,21 +130,11 @@ DEFAULT_PROVIDER_ALERT_RADIUS_KM = 10  # km
 SEVERITY_LEVELS = ["minor", "moderate", "severe", "extreme"]
 SEVERITY_RANK: dict[str, int] = {level: idx for idx, level in enumerate(SEVERITY_LEVELS)}
 
-# Plan-aligned aliases (v0.6 FR-Alert)
-CONF_POLLING_INTERVAL = CONF_PROVIDER_POLL_INTERVAL
-CONF_ALERT_RADIUS = CONF_PROVIDER_ALERT_RADIUS_KM
-CONF_AUTO_CANCEL = CONF_PROVIDER_AUTO_CANCEL
-CONF_MIN_SEVERITY = CONF_PROVIDER_MIN_SEVERITY
-
-DEFAULT_POLLING_INTERVAL = DEFAULT_PROVIDER_POLL_INTERVAL
-MIN_POLLING_INTERVAL = PROVIDER_POLL_INTERVAL_MIN
-MAX_POLLING_INTERVAL = PROVIDER_POLL_INTERVAL_MAX
-DEFAULT_AUTO_CANCEL = DEFAULT_PROVIDER_AUTO_CANCEL
-DEFAULT_MIN_SEVERITY = DEFAULT_PROVIDER_MIN_SEVERITY
-
 # ---------------------------------------------------------------------------
 # v0.6 — OSRM routing (Routage)
 # ---------------------------------------------------------------------------
+CONF_OSRM_ENABLED = "osrm_enabled"
+CONF_OSRM_URL = "osrm_url"
 CONF_OSRM_MODE = "osrm_mode"
 CONF_OSRM_TRANSPORT_MODE = "osrm_transport_mode"
 
@@ -165,6 +158,17 @@ DEFAULT_TTS_ENABLED = False
 DEFAULT_TTS_SERVICE = "auto"
 DEFAULT_TTS_MEDIA_PLAYERS: list[str] = []
 
+# TTS defaults
+DEFAULT_TTS_VOLUME = 0.8  # 0.0-1.0, applied to media_player before speaking
+DEFAULT_TTS_BUFFER_SECONDS = 2  # extra seconds after estimated duration
+
+# Auto-detection order: first match wins (service name only, domain is "tts").
+TTS_SERVICE_CANDIDATES: list[str] = [
+    "google_translate_say",
+    "cloud_say",
+    "speak",
+]
+
 # ---------------------------------------------------------------------------
 # v0.6 — Drill mode (service parameter, scaffolded here for shared use)
 # ---------------------------------------------------------------------------
@@ -181,17 +185,3 @@ THREAT_LABELS_FR: dict[str, str] = {
     "flood": "inondation",
     "nuclear_chemical": "nucleaire chimique",
 }
-
-# Backwards-compat alias — OptionsFlow PR #8 exported THREAT_TYPE_LABELS_FR.
-THREAT_TYPE_LABELS_FR = THREAT_LABELS_FR
-
-# TTS defaults
-DEFAULT_TTS_VOLUME = 0.8  # 0.0-1.0, applied to media_player before speaking
-DEFAULT_TTS_BUFFER_SECONDS = 2  # extra seconds after estimated duration
-
-# Auto-detection order: first match wins (service name only, domain is "tts").
-TTS_SERVICE_CANDIDATES: list[str] = [
-    "google_translate_say",
-    "cloud_say",
-    "speak",
-]

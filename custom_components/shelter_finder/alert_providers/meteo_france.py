@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import logging
-import math
 from datetime import datetime, timezone
 from typing import Any
 
 import aiohttp
 
-from .base import AlertProvider, GouvAlert
+from .._geo import haversine_km
+from .base import AlertProvider, GouvAlert, parse_iso8601
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -54,18 +54,22 @@ DEPARTMENT_CENTROIDS: dict[str, tuple[float, float]] = {
     "93": (48.90, 2.50), "94": (48.80, 2.45), "95": (49.05, 2.15),
 }
 
+# Meteo France phenomenon -> Shelter Finder threat_type.
+#
+# Deliberately unmapped threats: "attack" and "armed_conflict" — no public
+# French government feed currently exposes those categories, so they remain
+# available only via manual / webhook / button triggers.
+#
+# "neige-verglas" (snow/ice) and "canicule" (heatwave) are mapped to "storm"
+# because they share the same response pattern (shelter-in-place, avoid
+# exposure) and the closest available shelter scoring profile. If a
+# dedicated cold/heat threat type is ever added to THREAT_TYPES, these
+# keywords should move accordingly.
 _WIND_KEYWORDS = {"vent"}
 _STORM_KEYWORDS = {"orages", "orage"}
 _FLOOD_KEYWORDS = {"pluie-inondation", "inondation", "crues"}
-
-
-def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    r = 6371.0
-    phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dl = math.radians(lon2 - lon1)
-    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dl / 2) ** 2
-    return 2 * r * math.asin(math.sqrt(a))
+_SNOW_KEYWORDS = {"neige-verglas", "neige", "verglas"}
+_HEAT_KEYWORDS = {"canicule"}
 
 
 def _nearby_department_codes(lat: float, lon: float, radius_km: float) -> set[str]:
@@ -74,7 +78,7 @@ def _nearby_department_codes(lat: float, lon: float, radius_km: float) -> set[st
     return {
         code
         for code, (dlat, dlon) in DEPARTMENT_CENTROIDS.items()
-        if _haversine_km(lat, lon, dlat, dlon) <= buffer
+        if haversine_km(lat, lon, dlat, dlon) <= buffer
     }
 
 
@@ -104,19 +108,13 @@ def _map_phenomenon_to_threat(name: str | None) -> str | None:
     for kw in _WIND_KEYWORDS:
         if kw in n:
             return "storm"
+    for kw in _SNOW_KEYWORDS:
+        if kw in n:
+            return "storm"
+    for kw in _HEAT_KEYWORDS:
+        if kw in n:
+            return "storm"
     return None
-
-
-def _parse_iso8601(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    try:
-        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt
 
 
 class MeteoFranceProvider(AlertProvider):
@@ -147,8 +145,8 @@ class MeteoFranceProvider(AlertProvider):
         alerts: list[GouvAlert] = []
         periods = payload.get("product", {}).get("periods", []) or []
         for period in periods:
-            starts = _parse_iso8601(period.get("begin_validity_time")) or datetime.now(timezone.utc)
-            expires = _parse_iso8601(period.get("end_validity_time"))
+            starts = parse_iso8601(period.get("begin_validity_time")) or datetime.now(timezone.utc)
+            expires = parse_iso8601(period.get("end_validity_time"))
             starts_iso = starts.isoformat()
             domain_ids = (period.get("timelaps") or {}).get("domain_ids", []) or []
             for dom in domain_ids:

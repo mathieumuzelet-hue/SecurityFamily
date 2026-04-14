@@ -18,10 +18,10 @@ async def test_build_alert_provider_manager_both_enabled():
     config = {
         const.CONF_PROVIDER_GEORISQUES: True,
         const.CONF_PROVIDER_METEO_FRANCE: True,
-        const.CONF_POLLING_INTERVAL: 90,
-        const.CONF_ALERT_RADIUS: 15,
-        const.CONF_AUTO_CANCEL: False,
-        const.CONF_MIN_SEVERITY: "moderate",
+        const.CONF_PROVIDER_POLL_INTERVAL: 90,
+        const.CONF_PROVIDER_ALERT_RADIUS_KM: 15,
+        const.CONF_PROVIDER_AUTO_CANCEL: False,
+        const.CONF_PROVIDER_MIN_SEVERITY: "moderate",
     }
     alert_coord = MagicMock()
     manager = sf_init._build_alert_provider_manager(
@@ -65,18 +65,18 @@ async def test_build_alert_provider_manager_clamps_polling_interval():
     config = {
         const.CONF_PROVIDER_GEORISQUES: True,
         const.CONF_PROVIDER_METEO_FRANCE: False,
-        const.CONF_POLLING_INTERVAL: 5,   # below min
+        const.CONF_PROVIDER_POLL_INTERVAL: 5,   # below min
     }
     manager = sf_init._build_alert_provider_manager(
         hass=hass, session=session, config=config,
         alert_coordinator=MagicMock(), trigger_callback=lambda: None,
     )
     assert manager is not None
-    assert manager._polling_interval == const.MIN_POLLING_INTERVAL
+    assert manager._polling_interval == const.PROVIDER_POLL_INTERVAL_MIN
 
-    config[const.CONF_POLLING_INTERVAL] = 9999
+    config[const.CONF_PROVIDER_POLL_INTERVAL] = 9999
     manager2 = sf_init._build_alert_provider_manager(
         hass=hass, session=session, config=config,
         alert_coordinator=MagicMock(), trigger_callback=lambda: None,
     )
-    assert manager2._polling_interval == const.MAX_POLLING_INTERVAL
+    assert manager2._polling_interval == const.PROVIDER_POLL_INTERVAL_MAX

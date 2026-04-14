@@ -27,9 +27,17 @@ async def async_handle_webhook(hass: Any, webhook_id: str, request: Request) -> 
 
     source = data.get("source", "unknown")
 
-    alert_coordinator = hass.data.get(DOMAIN, {}).get("alert_coordinator")
-    if alert_coordinator is None:
-        return Response(status=500, text="Shelter Finder not initialized")
+    # Trigger on every configured entry; webhook is domain-wide.
+    triggered = 0
+    for value in hass.data.get(DOMAIN, {}).values():
+        if not isinstance(value, dict):
+            continue
+        ac = value.get("alert_coordinator")
+        if ac is None:
+            continue
+        ac.trigger(threat_type, triggered_by=f"webhook:{source}")
+        triggered += 1
 
-    alert_coordinator.trigger(threat_type, triggered_by=f"webhook:{source}")
+    if triggered == 0:
+        return Response(status=500, text="Shelter Finder not initialized")
     return Response(status=200, text="Alert triggered")

@@ -133,12 +133,15 @@ class TTSService:
             _LOGGER.debug("No shelters to announce; skipping voice announcement")
             return
 
-        # For now, use the first person's shelter to build the message.
+        # Pick the closest person's shelter to build the message.
         # (Per-speaker personalization is out of scope for v0.6; spec says
         # "closest person's shelter, or one message per person if multiple
         # speakers" — we implement the "closest person" variant as the
         # single-message flow; per-person routing can be added later.)
-        first_person, best = next(iter(shelters_by_person.items()))
+        first_person, best = min(
+            shelters_by_person.items(),
+            key=lambda kv: kv[1].get("distance_m", math.inf),
+        )
         message = build_message(
             threat_type=threat_type,
             shelter_name=best.get("name", "abri"),

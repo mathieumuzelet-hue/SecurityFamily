@@ -6,6 +6,9 @@ import asyncio
 import logging
 import math
 import time
+from collections import OrderedDict
+from dataclasses import dataclass
+from typing import Any
 
 import aiohttp
 
@@ -29,11 +32,6 @@ def calculate_eta_minutes(distance_m: float, travel_mode: str) -> float:
         return 0.0
     speed_ms = TRAVEL_SPEEDS.get(travel_mode, TRAVEL_SPEEDS["walking"])
     return round(distance_m / speed_ms / 60, 1)
-
-
-from collections import OrderedDict
-from dataclasses import dataclass
-from typing import Any
 
 
 @dataclass
@@ -120,7 +118,6 @@ class RoutingService:
     def _haversine_result(
         self, lat1: float, lon1: float, lat2: float, lon2: float,
     ) -> RouteResult:
-        from .const import TRAVEL_SPEEDS
         distance = haversine_distance(lat1, lon1, lat2, lon2)
         mode_key = "driving" if self.transport_mode == "driving" else "walking"
         speed = TRAVEL_SPEEDS.get(mode_key, TRAVEL_SPEEDS["walking"])
@@ -130,7 +127,6 @@ class RoutingService:
 
     def _cache(self) -> "OrderedDict[tuple, tuple[float, RouteResult]]":
         if not hasattr(self, "_cache_store"):
-            from collections import OrderedDict
             self._cache_store: OrderedDict[tuple, tuple[float, RouteResult]] = OrderedDict()
         return self._cache_store
 
@@ -182,13 +178,12 @@ class RoutingService:
         rest = scored[top_n:]
 
         # OSRM for top N (parallel)
-        import asyncio as _asyncio
         tasks = [
             self.async_get_route(person_lat, person_lon, c["latitude"], c["longitude"])
             for _, c in top
         ]
         if tasks:
-            top_results = await _asyncio.gather(*tasks)
+            top_results = await asyncio.gather(*tasks)
             for (_, c), r in zip(top, top_results):
                 results[c["id"]] = r
 

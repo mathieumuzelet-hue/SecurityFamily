@@ -37,5 +37,5 @@ def test_v06_defaults_exist() -> None:
     assert const.DEFAULT_TTS_VOLUME == 0.8
     assert const.SEVERITY_LEVELS == ["minor", "moderate", "severe", "extreme"]
     assert const.OSRM_MODES == ["public", "self_hosted"]
-    assert const.THREAT_TYPE_LABELS_FR["storm"] == "tempete"
-    assert const.THREAT_TYPE_LABELS_FR["nuclear_chemical"] == "nucleaire chimique"
+    assert const.THREAT_LABELS_FR["storm"] == "tempete"
+    assert const.THREAT_LABELS_FR["nuclear_chemical"] == "nucleaire chimique"
