@@ -24,21 +24,21 @@ from .cache import ShelterCache
 from .const import (
     CONF_ADAPTIVE_RADIUS,
     CONF_ADAPTIVE_RADIUS_MAX,
-    CONF_ALERT_RADIUS,
-    CONF_AUTO_CANCEL,
     CONF_CACHE_TTL,
     CONF_CUSTOM_OSM_TAGS,
     CONF_DEFAULT_TRAVEL_MODE,
     CONF_MAX_RE_NOTIFICATIONS,
-    CONF_MIN_SEVERITY,
     CONF_OSRM_ENABLED,
     CONF_OSRM_MODE,
     CONF_OSRM_URL,
     CONF_OVERPASS_URL,
     CONF_PERSONS,
-    CONF_POLLING_INTERVAL,
+    CONF_PROVIDER_ALERT_RADIUS_KM,
+    CONF_PROVIDER_AUTO_CANCEL,
     CONF_PROVIDER_GEORISQUES,
     CONF_PROVIDER_METEO_FRANCE,
+    CONF_PROVIDER_MIN_SEVERITY,
+    CONF_PROVIDER_POLL_INTERVAL,
     CONF_RE_NOTIFICATION_INTERVAL,
     CONF_SEARCH_RADIUS,
     CONF_OSRM_TRANSPORT_MODE,
@@ -48,23 +48,23 @@ from .const import (
     CONF_TTS_VOLUME,
     CONF_WEBHOOK_ID,
     DEFAULT_ADAPTIVE_RADIUS_MAX,
-    DEFAULT_AUTO_CANCEL,
     DEFAULT_CACHE_TTL,
     DEFAULT_MAX_RE_NOTIFICATIONS,
-    DEFAULT_MIN_SEVERITY,
     DEFAULT_OSRM_ENABLED,
     DEFAULT_OSRM_MODE,
     DEFAULT_OSRM_URL,
     DEFAULT_OVERPASS_URL,
-    DEFAULT_POLLING_INTERVAL,
+    DEFAULT_PROVIDER_AUTO_CANCEL,
+    DEFAULT_PROVIDER_MIN_SEVERITY,
+    DEFAULT_PROVIDER_POLL_INTERVAL,
     DEFAULT_RADIUS,
     DEFAULT_RE_NOTIFICATION_INTERVAL,
     DEFAULT_OSRM_TRANSPORT_MODE,
     DEFAULT_TRAVEL_MODE,
     DEFAULT_TTS_VOLUME,
     DOMAIN,
-    MAX_POLLING_INTERVAL,
-    MIN_POLLING_INTERVAL,
+    PROVIDER_POLL_INTERVAL_MAX,
+    PROVIDER_POLL_INTERVAL_MIN,
     SHELTER_TYPES,
     THREAT_TYPES,
 )
@@ -119,13 +119,13 @@ def _build_alert_provider_manager(
     if not providers:
         return None
 
-    raw_interval = int(config.get(CONF_POLLING_INTERVAL, DEFAULT_POLLING_INTERVAL))
-    polling_interval = max(MIN_POLLING_INTERVAL, min(MAX_POLLING_INTERVAL, raw_interval))
+    raw_interval = int(config.get(CONF_PROVIDER_POLL_INTERVAL, DEFAULT_PROVIDER_POLL_INTERVAL))
+    polling_interval = max(PROVIDER_POLL_INTERVAL_MIN, min(PROVIDER_POLL_INTERVAL_MAX, raw_interval))
 
     # Default alert radius = same as shelter search radius (converted to km)
     search_radius_m = config.get(CONF_SEARCH_RADIUS, DEFAULT_RADIUS)
     default_radius_km = float(search_radius_m) / 1000.0
-    radius_km = float(config.get(CONF_ALERT_RADIUS, default_radius_km))
+    radius_km = float(config.get(CONF_PROVIDER_ALERT_RADIUS_KM, default_radius_km))
 
     return AlertProviderManager(
         hass=hass,
@@ -134,8 +134,8 @@ def _build_alert_provider_manager(
         trigger_callback=trigger_callback,
         polling_interval=polling_interval,
         radius_km=radius_km,
-        auto_cancel=bool(config.get(CONF_AUTO_CANCEL, DEFAULT_AUTO_CANCEL)),
-        min_severity=config.get(CONF_MIN_SEVERITY, DEFAULT_MIN_SEVERITY),
+        auto_cancel=bool(config.get(CONF_PROVIDER_AUTO_CANCEL, DEFAULT_PROVIDER_AUTO_CANCEL)),
+        min_severity=config.get(CONF_PROVIDER_MIN_SEVERITY, DEFAULT_PROVIDER_MIN_SEVERITY),
     )
 
 
