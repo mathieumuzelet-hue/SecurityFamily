@@ -201,11 +201,11 @@ class TTSService:
         )
 
 
-def build_shelters_by_person(alert_coordinator: Any) -> dict[str, dict[str, Any]]:
+async def build_shelters_by_person(alert_coordinator: Any) -> dict[str, dict[str, Any]]:
     """Map person_entity_id -> best-shelter dict, skipping persons with no shelter."""
     out: dict[str, dict[str, Any]] = {}
     for person_id in alert_coordinator.persons:
-        best = alert_coordinator.get_best_shelter(person_id)
+        best = await alert_coordinator.get_best_shelter(person_id)
         if best is None:
             continue
         out[person_id] = best
