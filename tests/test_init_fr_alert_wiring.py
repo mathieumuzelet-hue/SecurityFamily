@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+import custom_components.shelter_finder as sf_init
 from custom_components.shelter_finder import const
-from custom_components.shelter_finder import __init__ as sf_init
 
 
 @pytest.mark.asyncio
