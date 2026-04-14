@@ -11,7 +11,9 @@ def mock_hass():
     hass = MagicMock()
     alert_coord = MagicMock()
     alert_coord.trigger = MagicMock()
-    hass.data = {"shelter_finder": {"alert_coordinator": alert_coord}}
+    # Per-entry layout: hass.data[DOMAIN][entry_id] = {...}. The webhook
+    # now iterates entries and triggers each that has an alert_coordinator.
+    hass.data = {"shelter_finder": {"entry_1": {"alert_coordinator": alert_coord}}}
     return hass
 
 @pytest.fixture
@@ -25,7 +27,7 @@ async def test_webhook_valid_payload(mock_hass):
     request.json = AsyncMock(return_value={"threat_type": "storm", "source": "fr-alert"})
     response = await async_handle_webhook(mock_hass, "test", request)
     assert response.status == 200
-    mock_hass.data["shelter_finder"]["alert_coordinator"].trigger.assert_called_once_with("storm", triggered_by="webhook:fr-alert")
+    mock_hass.data["shelter_finder"]["entry_1"]["alert_coordinator"].trigger.assert_called_once_with("storm", triggered_by="webhook:fr-alert")
 
 @pytest.mark.asyncio
 async def test_webhook_invalid_threat_type(mock_hass):

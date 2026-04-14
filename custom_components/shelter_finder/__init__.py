@@ -235,13 +235,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "routing_service": routing_service,
         "tts_service": tts_service,
     }
-    hass.data[DOMAIN]["alert_coordinator"] = alert_coordinator
-    hass.data[DOMAIN]["tts_service"] = tts_service
 
     def _on_provider_trigger() -> None:
         _notify_coordinators(hass)
         hass.async_create_task(
-            _send_alert_notifications(hass, alert_coordinator, "")
+            _send_alert_notifications(hass, alert_coordinator, "", tts_service=tts_service)
         )
 
     provider_manager = _build_alert_provider_manager(
@@ -301,20 +299,26 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id, None)
-        reserved = {"alert_coordinator", "tts_service", "_frontend_registered"}
-        if not any(k for k in hass.data[DOMAIN] if k not in reserved):
-            hass.data[DOMAIN].pop("alert_coordinator", None)
-            hass.data[DOMAIN].pop("tts_service", None)
 
     return unload_ok
 
 
+def _iter_entry_data(hass: HomeAssistant):
+    """Yield per-entry data dicts stored under hass.data[DOMAIN].
+
+    Skips non-dict sentinel values (e.g. `_frontend_registered: True`) and
+    dicts that don't look like config-entry payloads.
+    """
+    for value in hass.data.get(DOMAIN, {}).values():
+        if isinstance(value, dict) and "coordinator" in value:
+            yield value
+
+
 def _notify_coordinators(hass: HomeAssistant) -> None:
     """Signal all coordinators to re-push data to their entity listeners."""
-    for entry_data in hass.data.get(DOMAIN, {}).values():
-        if isinstance(entry_data, dict) and "coordinator" in entry_data:
-            coord = entry_data["coordinator"]
-            coord.async_set_updated_data(coord.data or [])
+    for entry_data in _iter_entry_data(hass):
+        coord = entry_data["coordinator"]
+        coord.async_set_updated_data(coord.data or [])
 
 
 def _register_services(hass: HomeAssistant) -> None:
@@ -324,22 +328,27 @@ def _register_services(hass: HomeAssistant) -> None:
         threat_type = call.data["threat_type"]
         message = call.data.get("message", "")
         drill = call.data.get("drill", False)
-        ac = hass.data.get(DOMAIN, {}).get("alert_coordinator")
-        if ac:
+        for entry_data in _iter_entry_data(hass):
+            ac = entry_data.get("alert_coordinator")
+            if ac is None:
+                continue
             ac.trigger(threat_type, triggered_by="service", drill=drill)
             _notify_coordinators(hass)
-            await _send_alert_notifications(hass, ac, message)
+            await _send_alert_notifications(
+                hass, ac, message, tts_service=entry_data.get("tts_service"),
+            )
 
     async def handle_cancel_alert(call: ServiceCall) -> None:
-        ac = hass.data.get(DOMAIN, {}).get("alert_coordinator")
-        if ac:
+        for entry_data in _iter_entry_data(hass):
+            ac = entry_data.get("alert_coordinator")
+            if ac is None:
+                continue
             ac.cancel()
-            _notify_coordinators(hass)
+        _notify_coordinators(hass)
 
     async def handle_refresh_shelters(call: ServiceCall) -> None:
-        for entry_data in hass.data.get(DOMAIN, {}).values():
-            if isinstance(entry_data, dict) and "coordinator" in entry_data:
-                await entry_data["coordinator"].async_force_refresh()
+        for entry_data in _iter_entry_data(hass):
+            await entry_data["coordinator"].async_force_refresh()
 
     async def handle_add_custom_poi(call: ServiceCall) -> None:
         name = call.data["name"]
@@ -348,8 +357,8 @@ def _register_services(hass: HomeAssistant) -> None:
         shelter_type = call.data["shelter_type"]
         notes = call.data.get("notes", "")
 
-        for entry_data in hass.data.get(DOMAIN, {}).values():
-            if isinstance(entry_data, dict) and "cache" in entry_data:
+        for entry_data in _iter_entry_data(hass):
+            if "cache" in entry_data:
                 cache = entry_data["cache"]
                 pois = await hass.async_add_executor_job(cache.load_pois)
                 pois.append({
@@ -367,10 +376,12 @@ def _register_services(hass: HomeAssistant) -> None:
 
     async def handle_confirm_safe(call: ServiceCall) -> None:
         person = call.data["person"]
-        ac = hass.data.get(DOMAIN, {}).get("alert_coordinator")
-        if ac:
+        for entry_data in _iter_entry_data(hass):
+            ac = entry_data.get("alert_coordinator")
+            if ac is None:
+                continue
             ac.confirm_safe(person)
-            _notify_coordinators(hass)
+        _notify_coordinators(hass)
 
     hass.services.async_register(
         DOMAIN, "trigger_alert", handle_trigger_alert,
@@ -413,8 +424,18 @@ def _find_mobile_app_service(hass: HomeAssistant, person_name: str) -> str | Non
     return None
 
 
-async def _send_alert_notifications(hass: HomeAssistant, alert_coordinator: AlertCoordinator, message: str = "") -> None:
-    """Send push notifications to all tracked persons."""
+async def _send_alert_notifications(
+    hass: HomeAssistant,
+    alert_coordinator: AlertCoordinator,
+    message: str = "",
+    tts_service: TTSService | None = None,
+) -> None:
+    """Send push notifications to all tracked persons.
+
+    `tts_service` is passed explicitly from the caller (per-entry) rather than
+    read from a shared hass.data global — this keeps the call site safe if
+    multiple config entries are ever created.
+    """
     for person_id in alert_coordinator.persons:
         best = await alert_coordinator.get_best_shelter(person_id)
         if best is None:
@@ -473,7 +494,6 @@ async def _send_alert_notifications(hass: HomeAssistant, alert_coordinator: Aler
     # v0.6: Voice announcement on speakers — fire-and-forget so push
     # notifications are not serialized behind the TTS playback + volume
     # restore cycle (which can take 10+ seconds on slow speakers).
-    tts_service = hass.data.get(DOMAIN, {}).get("tts_service")
     if tts_service is not None:
         is_drill = getattr(alert_coordinator, "is_drill", False)
 
