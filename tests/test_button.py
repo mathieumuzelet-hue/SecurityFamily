@@ -42,3 +42,22 @@ async def test_cancel_button_press(mock_coordinator, mock_alert_coordinator):
     await button.async_press()
     mock_alert_coordinator.cancel.assert_called_once()
     mock_coordinator.async_set_updated_data.assert_called_once()
+
+
+from custom_components.shelter_finder.button import ShelterDrillButton
+
+
+def test_drill_button_attributes(mock_coordinator, mock_alert_coordinator):
+    button = ShelterDrillButton(mock_coordinator, mock_alert_coordinator)
+    assert button.unique_id == "shelter_finder_drill_alert"
+    assert "alert" in button.icon or "practice" in button.icon or "school" in button.icon
+
+
+@pytest.mark.asyncio
+async def test_drill_button_press(mock_coordinator, mock_alert_coordinator):
+    button = ShelterDrillButton(mock_coordinator, mock_alert_coordinator)
+    await button.async_press()
+    mock_alert_coordinator.trigger.assert_called_once_with(
+        "storm", triggered_by="button", drill=True
+    )
+    mock_coordinator.async_set_updated_data.assert_called_once()
