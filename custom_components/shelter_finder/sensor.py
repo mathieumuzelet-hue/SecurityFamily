@@ -13,7 +13,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .alert_coordinator import AlertCoordinator
 from .const import CONF_PERSONS, DOMAIN
 from .coordinator import ShelterUpdateCoordinator
-from .routing import calculate_eta_minutes, haversine_distance
+from .routing import RoutingService, calculate_eta_minutes, haversine_distance
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
@@ -43,6 +43,50 @@ def _find_nearest_shelter(
             min_dist = dist
             nearest = {**shelter, "distance_m": round(dist)}
     return nearest
+
+
+async def _async_find_nearest_shelter(
+    routing_service: RoutingService | None,
+    shelters: list[dict[str, Any]],
+    lat: float,
+    lon: float,
+) -> dict[str, Any] | None:
+    if not shelters:
+        return None
+    # Ensure ids
+    normalized = []
+    for s in shelters:
+        if "id" not in s:
+            s = {**s, "id": f"{s.get('latitude')}_{s.get('longitude')}"}
+        normalized.append(s)
+
+    if routing_service is None:
+        best = None
+        best_dist = float("inf")
+        for s in normalized:
+            d = haversine_distance(lat, lon, s["latitude"], s["longitude"])
+            if d < best_dist:
+                best_dist = d
+                best = {**s, "distance_m": round(d), "route_source": "haversine",
+                        "eta_minutes": calculate_eta_minutes(d, "walking")}
+        return best
+
+    routes = await routing_service.async_get_routes_batch(lat, lon, normalized, top_n=10)
+    best = None
+    best_dist = float("inf")
+    for s in normalized:
+        r = routes.get(s["id"])
+        if r is None:
+            continue
+        if r.distance_m < best_dist:
+            best_dist = r.distance_m
+            best = {
+                **s,
+                "distance_m": round(r.distance_m),
+                "eta_minutes": round(r.eta_seconds / 60.0, 1),
+                "route_source": r.source,
+            }
+    return best
 
 
 def _get_person_coords(hass: HomeAssistant, person_id: str) -> tuple[float, float] | None:

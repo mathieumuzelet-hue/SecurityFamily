@@ -55,3 +55,20 @@ def test_nearest_sensor_with_alert(mock_coordinator, mock_alert_coordinator):
     attrs = sensor.extra_state_attributes
     assert attrs["shelter_type"] == "bunker"
     assert attrs["distance_m"] == 450
+
+
+@pytest.mark.asyncio
+async def test_find_nearest_shelter_async_uses_routing_service(fake_routing_service) -> None:
+    from custom_components.shelter_finder.sensor import _async_find_nearest_shelter
+
+    shelters = [
+        {"id": "s1", "name": "A", "latitude": 48.858, "longitude": 2.340, "shelter_type": "bunker"},
+        {"id": "s2", "name": "B", "latitude": 48.900, "longitude": 2.500, "shelter_type": "civic"},
+    ]
+    result = await _async_find_nearest_shelter(
+        fake_routing_service, shelters, 48.853, 2.3499,
+    )
+    assert result is not None
+    # Both shelters get distance=500 from the fake service; first is returned (tie-break)
+    assert result["distance_m"] == 500
+    assert result["route_source"] == "osrm"
