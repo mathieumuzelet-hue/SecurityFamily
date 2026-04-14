@@ -2,9 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import math
+import time
+
+import aiohttp
 
 from .const import TRAVEL_SPEEDS
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -64,10 +71,42 @@ class RoutingService:
         lat2: float,
         lon2: float,
     ) -> RouteResult:
-        """Return route between two points. Falls back to haversine when disabled/failed."""
         if not self.enabled or self.session is None:
             return self._haversine_result(lat1, lon1, lat2, lon2)
-        return self._haversine_result(lat1, lon1, lat2, lon2)  # OSRM wired in Task 4
+
+        key = self._cache_key(lat1, lon1, lat2, lon2)
+        now = time.monotonic()
+        cached = self._cache_get(key, now=now)
+        if cached is not None:
+            return cached
+
+        url = (
+            f"{self.url}/route/v1/{self.transport_mode}/"
+            f"{lon1},{lat1};{lon2},{lat2}?overview=false"
+        )
+        try:
+            timeout = aiohttp.ClientTimeout(total=self.timeout_s)
+            async with self.session.get(url, timeout=timeout) as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+            routes = data.get("routes") or []
+            if not routes:
+                raise ValueError(f"OSRM returned no routes: {data.get('code')}")
+            route = routes[0]
+            result = RouteResult(
+                distance_m=float(route["distance"]),
+                eta_seconds=float(route["duration"]),
+                source="osrm",
+            )
+            self._cache_put(key, result, now=now)
+            return result
+        except (aiohttp.ClientError, asyncio.TimeoutError, ValueError, KeyError) as err:
+            self._maybe_log_warning(err)
+            return self._haversine_result(lat1, lon1, lat2, lon2)
+
+    def _maybe_log_warning(self, err: Exception) -> None:
+        # Stub; Task 5 throttles this
+        _LOGGER.warning("OSRM call failed, falling back to haversine: %s", err)
 
     def _haversine_result(
         self, lat1: float, lon1: float, lat2: float, lon2: float,

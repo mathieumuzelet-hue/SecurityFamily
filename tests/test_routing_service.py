@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import aiohttp
 import pytest
+from aioresponses import aioresponses
 
 from custom_components.shelter_finder.routing import RouteResult, RoutingService
 
@@ -69,3 +71,43 @@ def test_cache_evicts_when_over_max() -> None:
     assert svc._cache_get((1, 1, 1, 1), now=4.0) is None
     assert svc._cache_get((2, 2, 2, 2), now=4.0) is not None
     assert svc._cache_get((3, 3, 3, 3), now=4.0) is not None
+
+
+@pytest.mark.asyncio
+async def test_osrm_success_returns_osrm_source() -> None:
+    payload = {
+        "code": "Ok",
+        "routes": [{"distance": 1234.5, "duration": 890.2}],
+    }
+    # OSRM uses lon,lat order
+    expected_url = (
+        "https://router.project-osrm.org/route/v1/foot/"
+        "2.3499,48.853;2.3376,48.8606?overview=false"
+    )
+    with aioresponses() as mocked:
+        mocked.get(expected_url, payload=payload)
+        async with aiohttp.ClientSession() as session:
+            svc = RoutingService(session=session, enabled=True)
+            result = await svc.async_get_route(48.8530, 2.3499, 48.8606, 2.3376)
+    assert result.source == "osrm"
+    assert result.distance_m == 1234.5
+    assert result.eta_seconds == 890.2
+
+
+@pytest.mark.asyncio
+async def test_osrm_second_call_is_cached() -> None:
+    payload = {"code": "Ok", "routes": [{"distance": 500.0, "duration": 360.0}]}
+    with aioresponses() as mocked:
+        mocked.get(
+            "https://router.project-osrm.org/route/v1/foot/"
+            "2.3499,48.853;2.3376,48.8606?overview=false",
+            payload=payload,
+        )
+        async with aiohttp.ClientSession() as session:
+            svc = RoutingService(session=session, enabled=True)
+            first = await svc.async_get_route(48.8530, 2.3499, 48.8606, 2.3376)
+            second = await svc.async_get_route(48.8530, 2.3499, 48.8606, 2.3376)
+    assert first.source == "osrm"
+    assert second.source == "osrm"
+    assert second.distance_m == 500.0
+    # Only 1 mocked response was registered; a second call would fail the mock
