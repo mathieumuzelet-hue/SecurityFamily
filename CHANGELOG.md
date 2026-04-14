@@ -2,6 +2,22 @@
 
 All notable changes to Shelter Finder are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.2] — 2026-04-14
+
+Safety fix for households with multiple tracked persons.
+
+### Fixed
+- Shelter refresh now queries Overpass around **each configured person's
+  current location** instead of only around `zone.home`. Previously, with
+  two or more persons configured in different parts of town (e.g. one at
+  home, one at work), only the `zone.home` area was covered — the other
+  person(s) had no nearby shelters discovered at all, which defeats the
+  point of per-person nearest-shelter routing during an alert. Each
+  person now gets their own Overpass query with the same adaptive-radius
+  widening; results are merged and deduplicated by OSM id (or rounded
+  coordinates when the id is missing). `zone.home` is still used as a
+  last-resort fallback when no tracked person has a known location.
+
 ## [0.6.1] — 2026-04-14
 
 Post-release polish sweep closing the v0.6 code-review findings. No user-facing
