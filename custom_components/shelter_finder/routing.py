@@ -55,3 +55,24 @@ class RoutingService:
         self.timeout_s = timeout_s
         self.cache_ttl_s = cache_ttl_s
         self.cache_max = cache_max
+
+    async def async_get_route(
+        self,
+        lat1: float,
+        lon1: float,
+        lat2: float,
+        lon2: float,
+    ) -> RouteResult:
+        """Return route between two points. Falls back to haversine when disabled/failed."""
+        if not self.enabled or self.session is None:
+            return self._haversine_result(lat1, lon1, lat2, lon2)
+        return self._haversine_result(lat1, lon1, lat2, lon2)  # OSRM wired in Task 4
+
+    def _haversine_result(
+        self, lat1: float, lon1: float, lat2: float, lon2: float,
+    ) -> RouteResult:
+        from .const import TRAVEL_SPEEDS
+        distance = haversine_distance(lat1, lon1, lat2, lon2)
+        mode_key = "driving" if self.transport_mode == "driving" else "walking"
+        speed = TRAVEL_SPEEDS.get(mode_key, TRAVEL_SPEEDS["walking"])
+        return RouteResult(distance_m=distance, eta_seconds=distance / speed, source="haversine")
