@@ -7,20 +7,30 @@ from datetime import datetime, timezone
 from typing import Any
 
 from .const import THREAT_TYPES
-from .routing import calculate_eta_minutes
+from .routing import RoutingService, calculate_eta_minutes
 from .shelter_logic import rank_shelters
 
 _LOGGER = logging.getLogger(__name__)
 
 
 class AlertCoordinator:
-    def __init__(self, hass: Any, shelter_coordinator: Any, persons: list[str], travel_mode: str = "walking", re_notification_interval: int = 5, max_re_notifications: int = 3) -> None:
+    def __init__(
+        self,
+        hass: Any,
+        shelter_coordinator: Any,
+        persons: list[str],
+        travel_mode: str = "walking",
+        re_notification_interval: int = 5,
+        max_re_notifications: int = 3,
+        routing_service: "RoutingService | None" = None,
+    ) -> None:
         self.hass = hass
         self.shelter_coordinator = shelter_coordinator
         self.persons = persons
         self.travel_mode = travel_mode
         self.re_notification_interval = re_notification_interval
         self.max_re_notifications = max_re_notifications
+        self.routing_service = routing_service
         self._is_active = False
         self._threat_type: str | None = None
         self._triggered_by: str | None = None
@@ -78,7 +88,7 @@ class AlertCoordinator:
         if person_entity_id not in self._persons_safe:
             self._persons_safe.append(person_entity_id)
 
-    def get_best_shelter(self, person_entity_id: str) -> dict[str, Any] | None:
+    async def get_best_shelter(self, person_entity_id: str) -> dict[str, Any] | None:
         if not self._is_active or self._threat_type is None:
             return None
         state = self.hass.states.get(person_entity_id)
@@ -89,11 +99,43 @@ class AlertCoordinator:
         if lat is None or lon is None:
             return None
         shelters = self.shelter_coordinator.data or []
-        ranked = rank_shelters(shelters, self._threat_type, lat, lon)
+        if not shelters:
+            return None
+
+        # Ensure every shelter has an id (OSM ones usually do; synthesize otherwise)
+        normalized = []
+        for s in shelters:
+            if "id" not in s:
+                s = {**s, "id": f"{s.get('latitude')}_{s.get('longitude')}"}
+            normalized.append(s)
+
+        route_source = "haversine"
+        extra_distances: dict[str, float] = {}
+        eta_lookup: dict[str, float] = {}
+        if self.routing_service is not None:
+            routes = await self.routing_service.async_get_routes_batch(
+                lat, lon, normalized, top_n=10,
+            )
+            for sid, r in routes.items():
+                extra_distances[sid] = r.distance_m
+                eta_lookup[sid] = r.eta_seconds
+            if routes and any(r.source == "osrm" for r in routes.values()):
+                route_source = "osrm"
+
+        ranked = rank_shelters(
+            normalized, self._threat_type, lat, lon,
+            extra_distances=extra_distances or None,
+        )
         if not ranked:
             return None
         best = ranked[0]
-        best["eta_minutes"] = calculate_eta_minutes(best["distance_m"], self.travel_mode)
+        best_id = best["id"]
+        eta_seconds = eta_lookup.get(best_id)
+        if eta_seconds is not None:
+            best["eta_minutes"] = round(eta_seconds / 60.0, 1)
+        else:
+            best["eta_minutes"] = calculate_eta_minutes(best["distance_m"], self.travel_mode)
+        best["route_source"] = route_source
         return best
 
     def should_re_notify(self, person_entity_id: str) -> bool:
