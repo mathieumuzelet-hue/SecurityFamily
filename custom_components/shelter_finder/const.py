@@ -140,9 +140,6 @@ DEFAULT_OSRM_TRANSPORT_MODE = "walking"
 OSRM_MODES = ["public", "self_hosted"]
 OSRM_TRANSPORT_MODES = ["walking", "driving"]
 
-CONF_TRANSPORT_MODE = "transport_mode"
-DEFAULT_TRANSPORT_MODE = "foot"
-
 # ---------------------------------------------------------------------------
 # v0.6 — TTS announcements (Notifications)
 # ---------------------------------------------------------------------------

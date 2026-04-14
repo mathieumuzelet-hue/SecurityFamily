@@ -31,7 +31,7 @@ from .const import (
     CONF_PERSONS,
     CONF_RE_NOTIFICATION_INTERVAL,
     CONF_SEARCH_RADIUS,
-    CONF_TRANSPORT_MODE,
+    CONF_OSRM_TRANSPORT_MODE,
     CONF_WEBHOOK_ID,
     DEFAULT_ADAPTIVE_RADIUS_MAX,
     DEFAULT_CACHE_TTL,
@@ -41,7 +41,7 @@ from .const import (
     DEFAULT_OVERPASS_URL,
     DEFAULT_RADIUS,
     DEFAULT_RE_NOTIFICATION_INTERVAL,
-    DEFAULT_TRANSPORT_MODE,
+    DEFAULT_OSRM_TRANSPORT_MODE,
     DEFAULT_TRAVEL_MODE,
     DOMAIN,
     SHELTER_TYPES,
@@ -104,7 +104,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     osrm_enabled = config.get(CONF_OSRM_ENABLED, DEFAULT_OSRM_ENABLED)
     osrm_url = config.get(CONF_OSRM_URL, DEFAULT_OSRM_URL)
-    transport_mode = config.get(CONF_TRANSPORT_MODE, DEFAULT_TRANSPORT_MODE)
+    osrm_transport = config.get(CONF_OSRM_TRANSPORT_MODE, DEFAULT_OSRM_TRANSPORT_MODE)
+    transport_mode = "driving" if osrm_transport == "driving" else "foot"
     routing_service = RoutingService(
         session=session,
         enabled=osrm_enabled,
