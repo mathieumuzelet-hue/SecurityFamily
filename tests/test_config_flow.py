@@ -16,6 +16,7 @@ from custom_components.shelter_finder.const import (
     CONF_PROVIDER_METEO_FRANCE,
     CONF_PROVIDER_MIN_SEVERITY,
     CONF_PROVIDER_POLL_INTERVAL,
+    CONF_RE_NOTIFICATION_INTERVAL,
     CONF_SEARCH_RADIUS,
 )
 from tests.stubs.homeassistant.config_entries import ConfigEntry
@@ -114,3 +115,30 @@ def test_step_routing_submit_advances_to_notifications() -> None:
     assert flow._options[CONF_OSRM_ENABLED] is True
     assert flow._options[CONF_OSRM_MODE] == "self_hosted"
     assert flow._options[CONF_OSRM_URL] == "http://osrm.local:5000"
+
+
+from custom_components.shelter_finder.const import (
+    CONF_MAX_RE_NOTIFICATIONS,
+    CONF_TTS_ENABLED,
+    CONF_TTS_MEDIA_PLAYERS,
+    CONF_TTS_SERVICE,
+    CONF_TTS_VOLUME,
+)
+
+
+def test_step_notifications_renders_renotif_and_tts_fields() -> None:
+    flow = _make_flow()
+    result = _run(flow.async_step_notifications())
+
+    assert result["type"] == "form"
+    assert result["step_id"] == "notifications"
+    schema_keys = {str(k) for k in result["data_schema"].schema.keys()}
+    for expected in (
+        CONF_RE_NOTIFICATION_INTERVAL,
+        CONF_MAX_RE_NOTIFICATIONS,
+        CONF_TTS_ENABLED,
+        CONF_TTS_SERVICE,
+        CONF_TTS_MEDIA_PLAYERS,
+        CONF_TTS_VOLUME,
+    ):
+        assert expected in schema_keys, f"missing field {expected}"

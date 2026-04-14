@@ -245,7 +245,7 @@ class ShelterFinderOptionsFlow(OptionsFlow):
     async def async_step_notifications(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Step 3 — Notifications (placeholder, filled in Task 8)."""
+        """Step 3 — Notifications (re-notif + TTS)."""
         if user_input is not None:
             self._options.update(user_input)
             return await self.async_step_advanced()
@@ -256,6 +256,33 @@ class ShelterFinderOptionsFlow(OptionsFlow):
                 CONF_RE_NOTIFICATION_INTERVAL,
                 default=cur.get(CONF_RE_NOTIFICATION_INTERVAL, DEFAULT_RE_NOTIFICATION_INTERVAL),
             ): vol.All(int, vol.Range(min=1, max=60)),
+            vol.Required(
+                CONF_MAX_RE_NOTIFICATIONS,
+                default=cur.get(CONF_MAX_RE_NOTIFICATIONS, DEFAULT_MAX_RE_NOTIFICATIONS),
+            ): vol.All(int, vol.Range(min=0, max=20)),
+            vol.Required(
+                CONF_TTS_ENABLED,
+                default=cur.get(CONF_TTS_ENABLED, DEFAULT_TTS_ENABLED),
+            ): bool,
+            vol.Required(
+                CONF_TTS_SERVICE,
+                default=cur.get(CONF_TTS_SERVICE, DEFAULT_TTS_SERVICE),
+            ): str,
+            vol.Required(
+                CONF_TTS_MEDIA_PLAYERS,
+                default=cur.get(CONF_TTS_MEDIA_PLAYERS, DEFAULT_TTS_MEDIA_PLAYERS),
+            ): SelectSelector(
+                SelectSelectorConfig(
+                    options=[],
+                    multiple=True,
+                    custom_value=True,
+                    mode=SelectSelectorMode.LIST,
+                )
+            ),
+            vol.Required(
+                CONF_TTS_VOLUME,
+                default=cur.get(CONF_TTS_VOLUME, DEFAULT_TTS_VOLUME),
+            ): vol.All(int, vol.Range(min=0, max=100)),
         })
         return self.async_show_form(step_id="notifications", data_schema=schema)
 
