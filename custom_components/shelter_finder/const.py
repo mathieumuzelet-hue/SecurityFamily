@@ -64,17 +64,18 @@ SHELTER_TYPES = [
     "sports",
     "hospital",
     "government",
+    "police",
     "open_space",
 ]
 
 # Threat → shelter scoring matrix
 THREAT_SHELTER_SCORES: dict[str, dict[str, int]] = {
-    "storm": {"subway": 10, "bunker": 9, "civic": 8, "school": 7, "worship": 6, "shelter": 5, "sports": 4, "hospital": 3, "government": 3, "open_space": 1},
-    "earthquake": {"open_space": 10, "sports": 7, "shelter": 5, "school": 4, "subway": 2, "bunker": 2, "civic": 3, "worship": 3, "hospital": 4, "government": 3},
-    "attack": {"bunker": 10, "subway": 9, "civic": 7, "worship": 6, "school": 5, "hospital": 4, "government": 6, "shelter": 3, "sports": 2, "open_space": 1},
-    "armed_conflict": {"bunker": 10, "subway": 10, "civic": 6, "school": 5, "hospital": 4, "government": 5, "worship": 4, "shelter": 3, "sports": 2, "open_space": 1},
-    "flood": {"civic": 8, "school": 7, "worship": 6, "sports": 5, "hospital": 7, "government": 7, "shelter": 4, "open_space": 3, "subway": 1, "bunker": 1},
-    "nuclear_chemical": {"bunker": 10, "subway": 8, "civic": 4, "government": 4, "hospital": 3, "school": 3, "worship": 2, "shelter": 1, "sports": 1, "open_space": 0},
+    "storm": {"subway": 10, "bunker": 9, "civic": 8, "school": 7, "worship": 6, "shelter": 5, "sports": 4, "hospital": 3, "government": 3, "police": 5, "open_space": 1},
+    "earthquake": {"open_space": 10, "sports": 7, "shelter": 5, "school": 4, "subway": 2, "bunker": 2, "civic": 3, "worship": 3, "hospital": 4, "government": 3, "police": 3},
+    "attack": {"bunker": 10, "subway": 9, "police": 9, "civic": 7, "worship": 6, "school": 5, "hospital": 4, "government": 6, "shelter": 3, "sports": 2, "open_space": 1},
+    "armed_conflict": {"bunker": 10, "subway": 10, "police": 6, "civic": 6, "school": 5, "hospital": 4, "government": 5, "worship": 4, "shelter": 3, "sports": 2, "open_space": 1},
+    "flood": {"civic": 8, "school": 7, "worship": 6, "sports": 5, "hospital": 7, "government": 7, "police": 5, "shelter": 4, "open_space": 3, "subway": 1, "bunker": 1},
+    "nuclear_chemical": {"bunker": 10, "subway": 8, "civic": 4, "government": 4, "police": 3, "hospital": 3, "school": 3, "worship": 2, "shelter": 1, "sports": 1, "open_space": 0},
 }
 
 # Default OSM tags for Overpass queries
@@ -90,6 +91,7 @@ DEFAULT_OSM_TAGS = [
     "amenity=school",
     "building=hospital",
     "leisure=sports_centre",
+    "amenity=police",
 ]
 
 # OSM tag → shelter type mapping
@@ -105,6 +107,7 @@ OSM_TAG_TO_SHELTER_TYPE: dict[str, str] = {
     "amenity=school": "school",
     "building=hospital": "hospital",
     "leisure=sports_centre": "sports",
+    "amenity=police": "police",
 }
 
 # Travel modes
