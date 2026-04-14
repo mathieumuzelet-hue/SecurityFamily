@@ -222,3 +222,35 @@ def test_step_advanced_submit_creates_entry_with_all_options() -> None:
     assert data[CONF_TTS_VOLUME] == 80
     assert data[CONF_OVERPASS_URL] == "https://overpass.example.org/api/interpreter"
     assert data[CONF_CUSTOM_OSM_TAGS] == "amenity=shelter,building=bunker"
+
+
+def test_existing_options_are_used_as_defaults() -> None:
+    existing = {
+        CONF_SEARCH_RADIUS: 4500,
+        CONF_PROVIDER_GEORISQUES: True,
+        CONF_OSRM_ENABLED: True,
+        CONF_OSRM_URL: "http://osrm.local:5000",
+        CONF_TTS_ENABLED: True,
+        CONF_TTS_VOLUME: 55,
+        CONF_OVERPASS_URL: "https://overpass.example.org/api/interpreter",
+    }
+    flow = _make_flow(options=existing)
+
+    init_schema = _run(flow.async_step_init())["data_schema"].schema
+    routing_schema = _run(flow.async_step_routing())["data_schema"].schema
+    notif_schema = _run(flow.async_step_notifications())["data_schema"].schema
+    adv_schema = _run(flow.async_step_advanced())["data_schema"].schema
+
+    def _default_for(schema, key):
+        for marker in schema.keys():
+            if str(marker) == key:
+                return marker.default() if callable(marker.default) else marker.default
+        raise KeyError(key)
+
+    assert _default_for(init_schema, CONF_SEARCH_RADIUS) == 4500
+    assert _default_for(init_schema, CONF_PROVIDER_GEORISQUES) is True
+    assert _default_for(routing_schema, CONF_OSRM_ENABLED) is True
+    assert _default_for(routing_schema, CONF_OSRM_URL) == "http://osrm.local:5000"
+    assert _default_for(notif_schema, CONF_TTS_ENABLED) is True
+    assert _default_for(notif_schema, CONF_TTS_VOLUME) == 55
+    assert _default_for(adv_schema, CONF_OVERPASS_URL) == "https://overpass.example.org/api/interpreter"
