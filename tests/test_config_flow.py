@@ -142,3 +142,24 @@ def test_step_notifications_renders_renotif_and_tts_fields() -> None:
         CONF_TTS_VOLUME,
     ):
         assert expected in schema_keys, f"missing field {expected}"
+
+
+def test_step_notifications_submit_advances_to_advanced() -> None:
+    flow = _make_flow()
+    result = _run(flow.async_step_notifications(user_input={
+        CONF_RE_NOTIFICATION_INTERVAL: 10,
+        CONF_MAX_RE_NOTIFICATIONS: 5,
+        CONF_TTS_ENABLED: True,
+        CONF_TTS_SERVICE: "tts.google_translate_say",
+        CONF_TTS_MEDIA_PLAYERS: ["media_player.living_room", "media_player.kitchen"],
+        CONF_TTS_VOLUME: 70,
+    }))
+
+    assert result["type"] == "form"
+    assert result["step_id"] == "advanced"
+    assert flow._options[CONF_TTS_ENABLED] is True
+    assert flow._options[CONF_TTS_VOLUME] == 70
+    assert flow._options[CONF_TTS_MEDIA_PLAYERS] == [
+        "media_player.living_room",
+        "media_player.kitchen",
+    ]
