@@ -32,6 +32,14 @@ DEFAULT_MAX_RE_NOTIFICATIONS = 3
 DEFAULT_ADAPTIVE_RADIUS_MAX = 15000  # meters
 ADAPTIVE_RADIUS_MIN_RESULTS = 3
 
+# Per-person distance cutoff applied before ranking shelters, to prevent
+# recommending a far-away shelter (pulled into the global pool by another
+# person's zone) just because its type-score is high. See v0.6.3.
+SHELTER_DISTANCE_CUTOFF_MULTIPLIER = 1.5   # initial cutoff = search_radius * 1.5
+SHELTER_DISTANCE_CUTOFF_WIDEN = 3.0        # widen to search_radius * 3.0 if < 3 candidates
+SHELTER_DISTANCE_CUTOFF_MIN_CANDIDATES = 3
+SHELTER_DISTANCE_CUTOFF_FALLBACK_M = 5000  # fallback radius when search_radius unavailable
+
 # Threat types.
 # Note: "attack" and "armed_conflict" are deliberately not mapped by any
 # FR-Alert provider — no public government source currently exposes those

@@ -6,8 +6,14 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from .const import THREAT_TYPES
-from .routing import RoutingService, calculate_eta_minutes
+from .const import (
+    SHELTER_DISTANCE_CUTOFF_FALLBACK_M,
+    SHELTER_DISTANCE_CUTOFF_MIN_CANDIDATES,
+    SHELTER_DISTANCE_CUTOFF_MULTIPLIER,
+    SHELTER_DISTANCE_CUTOFF_WIDEN,
+    THREAT_TYPES,
+)
+from .routing import RoutingService, calculate_eta_minutes, haversine_distance
 from .shelter_logic import rank_shelters
 
 _LOGGER = logging.getLogger(__name__)
@@ -115,6 +121,45 @@ class AlertCoordinator:
             if "id" not in s:
                 s = {**s, "id": f"{s.get('latitude')}_{s.get('longitude')}"}
             normalized.append(s)
+
+        # --- v0.6.3 safety fix ---------------------------------------------
+        # Strict per-person distance cutoff BEFORE ranking. Without this,
+        # a high type-score shelter 20+ km away (pulled into the pool by
+        # another person's zone) can outrank a closer, slightly lower-type
+        # one, because `rank_shelters` weights type 10x over distance.
+        search_radius_m = getattr(
+            self.shelter_coordinator, "search_radius", None
+        ) or SHELTER_DISTANCE_CUTOFF_FALLBACK_M
+        initial_cutoff_m = search_radius_m * SHELTER_DISTANCE_CUTOFF_MULTIPLIER
+        widen_cutoff_m = search_radius_m * SHELTER_DISTANCE_CUTOFF_WIDEN
+
+        def _within(cutoff_m: float) -> list[dict[str, Any]]:
+            kept: list[dict[str, Any]] = []
+            for s in normalized:
+                slat = s.get("latitude")
+                slon = s.get("longitude")
+                if slat is None or slon is None:
+                    continue
+                if haversine_distance(lat, lon, slat, slon) <= cutoff_m:
+                    kept.append(s)
+            return kept
+
+        filtered = _within(initial_cutoff_m)
+        if len(filtered) < SHELTER_DISTANCE_CUTOFF_MIN_CANDIDATES:
+            widened = _within(widen_cutoff_m)
+            if len(widened) > len(filtered):
+                _LOGGER.debug(
+                    "shelter cutoff widened for %s: %d within %.0fm -> %d within %.0fm",
+                    person_entity_id,
+                    len(filtered),
+                    initial_cutoff_m,
+                    len(widened),
+                    widen_cutoff_m,
+                )
+                filtered = widened
+        if not filtered:
+            return None
+        normalized = filtered
 
         route_source = "haversine"
         extra_distances: dict[str, float] = {}
