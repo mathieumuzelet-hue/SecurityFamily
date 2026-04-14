@@ -54,9 +54,22 @@ DEPARTMENT_CENTROIDS: dict[str, tuple[float, float]] = {
     "93": (48.90, 2.50), "94": (48.80, 2.45), "95": (49.05, 2.15),
 }
 
+# Meteo France phenomenon -> Shelter Finder threat_type.
+#
+# Deliberately unmapped threats: "attack" and "armed_conflict" — no public
+# French government feed currently exposes those categories, so they remain
+# available only via manual / webhook / button triggers.
+#
+# "neige-verglas" (snow/ice) and "canicule" (heatwave) are mapped to "storm"
+# because they share the same response pattern (shelter-in-place, avoid
+# exposure) and the closest available shelter scoring profile. If a
+# dedicated cold/heat threat type is ever added to THREAT_TYPES, these
+# keywords should move accordingly.
 _WIND_KEYWORDS = {"vent"}
 _STORM_KEYWORDS = {"orages", "orage"}
 _FLOOD_KEYWORDS = {"pluie-inondation", "inondation", "crues"}
+_SNOW_KEYWORDS = {"neige-verglas", "neige", "verglas"}
+_HEAT_KEYWORDS = {"canicule"}
 
 
 def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -102,6 +115,12 @@ def _map_phenomenon_to_threat(name: str | None) -> str | None:
         if kw in n:
             return "storm"
     for kw in _WIND_KEYWORDS:
+        if kw in n:
+            return "storm"
+    for kw in _SNOW_KEYWORDS:
+        if kw in n:
+            return "storm"
+    for kw in _HEAT_KEYWORDS:
         if kw in n:
             return "storm"
     return None
