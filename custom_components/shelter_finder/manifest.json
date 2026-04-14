@@ -1,7 +1,7 @@
 {
   "domain": "shelter_finder",
   "name": "Shelter Finder",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "codeowners": [
     "@mathieumuzelet-hue"
   ],

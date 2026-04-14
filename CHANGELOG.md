@@ -2,6 +2,25 @@
 
 All notable changes to Shelter Finder are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.3] — 2026-04-14
+
+Safety-critical scoring fix exposed by the v0.6.2 per-person refresh.
+
+### Fixed
+- **Safety-critical:** the recommended best shelter for a given person could be
+  20+ km away even when much closer alternatives existed. After v0.6.2, shelters
+  fetched around other configured persons enter the global shelter pool, and a
+  high type-score shelter far from person D (e.g. a metro station 22 km away in
+  a neighbor's zone, score 90) could outrank a closer, lower-type shelter near
+  person D (e.g. a mairie 500 m away, score ~80) because `rank_shelters` weights
+  shelter type 10x over distance. Per-person best-shelter selection now applies
+  a strict haversine distance cutoff *before* ranking: shelters beyond
+  `search_radius × 1.5` are excluded outright. If fewer than 3 candidates remain
+  the cutoff is widened once to `search_radius × 3`; only when zero shelters
+  remain at 3x does the sensor report no shelter (person genuinely isolated).
+  This guarantees that a close-by shelter is always preferred over a distant
+  one with a slightly better type-score.
+
 ## [0.6.2] — 2026-04-14
 
 Safety fix for households with multiple tracked persons.
