@@ -15,6 +15,23 @@ _LOGGER = logging.getLogger(__name__)
 GEORISQUES_BASE_URL = "https://georisques.gouv.fr/api/v1"
 HTTP_TIMEOUT_SECONDS = 10
 
+# Georisques returns severity as a French label ("faible", "moyen", "fort",
+# "tres_fort") or a numeric code ("1".."4"). SEVERITY_RANK in the coordinator
+# only knows the English labels ("minor", "moderate", "severe", "extreme"),
+# so without normalization every Georisques alert is filtered out at the
+# default min_severity. Map FR -> EN; unknown values fall through unchanged.
+_FR_SEVERITY_MAP = {
+    "faible": "minor",
+    "moyen": "moderate",
+    "fort": "severe",
+    "tres_fort": "extreme",
+    "très_fort": "extreme",
+    "1": "minor",
+    "2": "moderate",
+    "3": "severe",
+    "4": "extreme",
+}
+
 
 def _map_risque_to_threat(risque: str) -> str | None:
     """Map a Georisques `risque` label/code to a Shelter Finder threat_type."""
@@ -88,7 +105,8 @@ class GeorisquesProvider(AlertProvider):
                 zone_lon = float(item.get("longitude"))
             except (TypeError, ValueError):
                 continue
-            severity = (item.get("niveau") or "moderate").lower()
+            raw = (item.get("niveau") or "moyen").lower()
+            severity = _FR_SEVERITY_MAP.get(raw, raw)
             alerts.append(
                 GouvAlert(
                     alert_id=f"georisques:{raw_id}",

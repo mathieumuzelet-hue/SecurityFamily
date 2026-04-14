@@ -135,7 +135,7 @@ class AlertCoordinator:
         )
         if not ranked:
             return None
-        best = ranked[0]
+        best = dict(ranked[0])
         best_id = best["id"]
         eta_seconds = eta_lookup.get(best_id)
         if eta_seconds is not None:

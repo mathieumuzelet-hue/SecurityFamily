@@ -11,6 +11,7 @@ from typing import Any
 import aiohttp
 import pytest
 
+from custom_components.shelter_finder.alert_providers.base import meets_min_severity
 from custom_components.shelter_finder.alert_providers.georisques import (
     GEORISQUES_BASE_URL,
     GeorisquesProvider,
@@ -147,3 +148,57 @@ async def test_fetch_alerts_client_error_returns_empty():
     provider = GeorisquesProvider(session=session)
     alerts = await provider.async_fetch_alerts(48.85, 2.35, 10.0)
     assert alerts == []
+
+
+@pytest.mark.asyncio
+async def test_fetch_alerts_maps_french_severity_fort_to_severe():
+    """Regression: Georisques returns FR severity labels ("fort"), which must
+    map to the English label SEVERITY_RANK understands, otherwise the alert
+    is silently filtered out at the default min_severity="severe"."""
+    payload = {
+        "data": [
+            {
+                "id_gaspar": "GR-FR-1",
+                "risque": "Inondation",
+                "niveau": "fort",
+                "libelle": "Crue forte",
+                "description": "",
+                "latitude": 48.856,
+                "longitude": 2.351,
+                "date_debut": "2026-04-14T10:00:00Z",
+                "date_fin": None,
+            },
+        ]
+    }
+    session = _FakeSession(payload=payload)
+    provider = GeorisquesProvider(session=session)
+    alerts = await provider.async_fetch_alerts(48.85, 2.35, 10.0)
+
+    assert len(alerts) == 1
+    assert alerts[0].severity == "severe"
+    # And the mapped value must survive the default min_severity gate.
+    assert meets_min_severity(alerts[0].severity, "severe") is True
+
+
+@pytest.mark.asyncio
+async def test_fetch_alerts_maps_numeric_severity():
+    payload = {
+        "data": [
+            {
+                "id_gaspar": "GR-NUM-1",
+                "risque": "Inondation",
+                "niveau": "4",
+                "libelle": "Crue extreme",
+                "description": "",
+                "latitude": 48.856,
+                "longitude": 2.351,
+                "date_debut": "2026-04-14T10:00:00Z",
+                "date_fin": None,
+            },
+        ]
+    }
+    session = _FakeSession(payload=payload)
+    provider = GeorisquesProvider(session=session)
+    alerts = await provider.async_fetch_alerts(48.85, 2.35, 10.0)
+    assert len(alerts) == 1
+    assert alerts[0].severity == "extreme"
