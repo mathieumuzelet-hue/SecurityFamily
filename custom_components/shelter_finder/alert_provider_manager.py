@@ -86,8 +86,12 @@ class AlertProviderManager:
             self._in_flight.cancel()
             try:
                 await self._in_flight
-            except (asyncio.CancelledError, Exception):  # pragma: no cover
+            except asyncio.CancelledError:
                 pass
+            except Exception as err:  # pragma: no cover
+                _LOGGER.debug(
+                    "In-flight poll raised during async_stop: %s", err, exc_info=True,
+                )
         self._in_flight = None
 
     async def _scheduled_tick(self, _now) -> None:
