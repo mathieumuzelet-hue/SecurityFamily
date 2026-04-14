@@ -185,3 +185,27 @@ def test_resolve_targets_no_available_returns_empty() -> None:
     hass = MagicMock()
     hass.states.async_all.return_value = [_state("media_player.tv", "off")]
     assert resolve_targets(hass, []) == []
+
+
+from custom_components.shelter_finder.tts_service import estimate_duration_seconds
+
+
+def test_estimate_duration_short_message_floor() -> None:
+    # Short messages have a 3s floor.
+    assert estimate_duration_seconds("Hi.") == 3
+
+
+def test_estimate_duration_long_message_scales() -> None:
+    # 150 chars / 15 cps = 10s
+    msg = "x" * 150
+    assert estimate_duration_seconds(msg) == 10
+
+
+def test_estimate_duration_rounds_up() -> None:
+    # 16 chars / 15 cps = 1.07 -> floor kicks in -> 3s
+    assert estimate_duration_seconds("x" * 16) == 3
+
+
+def test_estimate_duration_medium_message() -> None:
+    # 75 chars / 15 cps = 5s
+    assert estimate_duration_seconds("x" * 75) == 5

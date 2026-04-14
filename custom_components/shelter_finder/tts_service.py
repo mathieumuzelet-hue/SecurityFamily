@@ -74,3 +74,15 @@ def resolve_targets(hass: Any, configured: list[str] | None) -> list[str]:
         if state.state in _AVAILABLE_MEDIA_STATES:
             targets.append(entity_id)
     return targets
+
+
+import math
+
+_CHARS_PER_SECOND = 15
+_MIN_DURATION_SECONDS = 3
+
+
+def estimate_duration_seconds(message: str) -> int:
+    """Estimate TTS playback time in seconds, with a 3s floor."""
+    raw = math.ceil(len(message) / _CHARS_PER_SECOND)
+    return max(raw, _MIN_DURATION_SECONDS)
