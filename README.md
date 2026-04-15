@@ -30,6 +30,12 @@ Alerts can be fired manually, via an external webhook, or automatically by the F
 
 ## Version highlights
 
+### [v0.6.5](https://github.com/mathieumuzelet-hue/SecurityFamily/releases/tag/v0.6.5) — 2026-04-14
+
+- **6 boutons drill** au lieu d'un seul — un bouton par type de menace (`button.shelter_drill_storm`, `_earthquake`, `_attack`, `_armed_conflict`, `_flood`, `_nuclear_chemical`). Permet de tester n'importe quel scénario depuis le dashboard.
+- Cleanup interne : multi-entry safety, helpers DRY (`_geo`, `parse_iso8601` partagés), TTS choisit la personne la plus proche, annonce vocale non-bloquante, log des exceptions au shutdown.
+- _Six drill buttons (one per threat), internal cleanup, multi-entry safe, DRY helpers._
+
 ### [v0.6.4](https://github.com/mathieumuzelet-hue/SecurityFamily/releases/tag/v0.6.4) — 2026-04-14
 
 - **Nouveau type d'abri : `police`** (OSM `amenity=police`). Scoring élevé en **attaque (9/10)** — personnel armé, bâtiment solide, communications. Score modéré en conflit armé (6/10, cible potentielle). Standard ailleurs.
@@ -121,7 +127,7 @@ L'intégration regroupe toutes ses entités. Ouvre la carte de l'intégration po
 | `sensor.alert_type` | Type de menace courante (storm, flood...) | Adapter les notifications au type |
 | `button.trigger_alert` | Déclencher une alerte (tempête par défaut) | Bouton dashboard |
 | `button.cancel_alert` | Annuler l'alerte active | Bouton dashboard |
-| `button.drill` | Déclencher un **exercice** (v0.6) | Test mensuel, pas de panique |
+| `button.shelter_drill_{threat}` | Déclencher un **exercice** par type de menace (v0.6.5) | 6 boutons : `_storm`, `_earthquake`, `_attack`, `_armed_conflict`, `_flood`, `_nuclear_chemical` |
 
 ### Attributs utiles
 
