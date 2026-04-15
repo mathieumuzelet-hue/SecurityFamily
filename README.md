@@ -256,20 +256,20 @@ automation:
         entity_id: binary_sensor.alert
         to: "on"
     action:
-      - service: notify.mobile_app_pixel_mathieu
+      - service: notify.mobile_app_pixel_alice
         data:
           title: >
             {% if state_attr('binary_sensor.alert', 'drill') %}[EXERCICE] {% endif %}
             ALERTE {{ states('sensor.alert_type') | upper }}
           message: >
-            Abri : {{ states('sensor.mathieu_shelter_nearest') }}
-            ({{ states('sensor.mathieu_shelter_distance') }}m,
-            ~{{ states('sensor.mathieu_shelter_eta') }} min)
+            Abri : {{ states('sensor.alice_shelter_nearest') }}
+            ({{ states('sensor.alice_shelter_distance') }}m,
+            ~{{ states('sensor.alice_shelter_eta') }} min)
           data:
             url: >-
               https://www.google.com/maps/dir/?api=1&destination={{
-              state_attr('sensor.mathieu_shelter_nearest', 'latitude') }},{{
-              state_attr('sensor.mathieu_shelter_nearest', 'longitude') }}&travelmode=walking
+              state_attr('sensor.alice_shelter_nearest', 'latitude') }},{{
+              state_attr('sensor.alice_shelter_nearest', 'longitude') }}&travelmode=walking
             priority: high
 ```
 
@@ -280,15 +280,15 @@ automation:
   - alias: "Alerte eloignement abri"
     trigger:
       - platform: numeric_state
-        entity_id: sensor.mathieu_shelter_distance
+        entity_id: sensor.alice_shelter_distance
         above: 5000
         for: "00:10:00"
     action:
-      - service: notify.mobile_app_pixel_mathieu
+      - service: notify.mobile_app_pixel_alice
         data:
           title: "Shelter Finder"
           message: >
-            Tu es a {{ states('sensor.mathieu_shelter_distance') }}m du premier abri.
+            Tu es a {{ states('sensor.alice_shelter_distance') }}m du premier abri.
 ```
 
 ### 4. Auto-annuler quand tout le monde est en sécurité
@@ -336,8 +336,8 @@ card:
 
     | Personne | Abri | Distance | ETA |
     |---|---|---|---|
-    | Mathieu | {{ states('sensor.mathieu_shelter_nearest') }} | {{ states('sensor.mathieu_shelter_distance') }}m | {{ states('sensor.mathieu_shelter_eta') }} min |
-    | Delphine | {{ states('sensor.delphine_shelter_nearest') }} | {{ states('sensor.delphine_shelter_distance') }}m | {{ states('sensor.delphine_shelter_eta') }} min |
+    | Alice | {{ states('sensor.alice_shelter_nearest') }} | {{ states('sensor.alice_shelter_distance') }}m | {{ states('sensor.alice_shelter_eta') }} min |
+    | Bob | {{ states('sensor.bob_shelter_nearest') }} | {{ states('sensor.bob_shelter_distance') }}m | {{ states('sensor.bob_shelter_eta') }} min |
 ```
 
 ### 7. Intégration webhook FR-Alert (système externe)
@@ -366,7 +366,7 @@ automation:
           entity_id: media_player.echo_salon
           message: >
             Attention, une alerte {{ states('sensor.alert_type') }} est active.
-            Rejoins {{ states('sensor.mathieu_shelter_nearest') }} au plus vite.
+            Rejoins {{ states('sensor.alice_shelter_nearest') }} au plus vite.
 ```
 
 ---
